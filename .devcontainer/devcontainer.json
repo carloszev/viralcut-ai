@@ -1,0 +1,14 @@
+{
+  "name": "ViralCut AI Cloud Server",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20-bullseye",
+  "forwardPorts": [4000],
+  "portsAttributes": {
+    "4000": {
+      "label": "ViralCut AI App",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg python3-pip && npm install && npm run build",
+  "postStartCommand": "npm run start"
+}
