@@ -187,73 +187,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   };
 
-  // Subtitle styling presets
+  // Subtitles disabled per user preference
   const renderSubtitles = () => {
-    if (!clip.subtitleConfig.enabled || !activeSubtitle) return null;
-
-    const { style, position, yOffsetPercent, uppercase, fontSize, textColor, highlightColor, backgroundColor } = clip.subtitleConfig;
-
-    const positionClass = position === 'top' 
-      ? 'top-8' 
-      : position === 'center' 
-      ? 'top-1/2 -translate-y-1/2' 
-      : 'bottom-12';
-
-    // Subtitle content
-    const currentSubObj = clip.subtitles?.find(s => currentLocalTime >= s.start && currentLocalTime <= s.end);
-
-    return (
-      <div 
-        className={`absolute left-0 right-0 px-4 text-center pointer-events-none z-20 flex justify-center ${positionClass}`}
-        style={yOffsetPercent ? { bottom: `${100 - yOffsetPercent}%` } : undefined}
-      >
-        <div 
-          className={`inline-block px-3.5 py-1.5 rounded-xl backdrop-blur-sm max-w-[90%] transition-all ${
-            style === 'hormozi'
-              ? 'font-black tracking-tight drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]'
-              : style === 'cyber'
-              ? 'font-mono border border-cyber-cyan/40 shadow-glow-cyan'
-              : style === 'cinema'
-              ? 'font-serif tracking-widest'
-              : 'font-bold'
-          }`}
-          style={{
-            fontSize: `${fontSize || 24}px`,
-            backgroundColor: style === 'clean' ? 'transparent' : backgroundColor || 'rgba(0,0,0,0.7)',
-            textTransform: uppercase ? 'uppercase' : 'none',
-            color: textColor || '#FFFFFF',
-          }}
-        >
-          {currentSubObj && currentSubObj.words && currentSubObj.words.length > 0 ? (
-            <span className="flex flex-wrap justify-center gap-1.5">
-              {currentSubObj.words.map((w, idx) => {
-                const isCurrent = idx === activeWordIndex;
-                const isHighlight = w.highlight || isCurrent;
-                return (
-                  <span
-                    key={idx}
-                    className={`transition-all duration-100 ${
-                      isCurrent
-                        ? 'scale-110 inline-block font-extrabold text-cyber-cyan drop-shadow-[0_0_12px_rgba(0,240,255,0.8)]'
-                        : isHighlight
-                        ? 'text-yellow-300'
-                        : ''
-                    }`}
-                    style={isCurrent ? { color: highlightColor || '#00F0FF' } : undefined}
-                  >
-                    {w.word}
-                  </span>
-                );
-              })}
-            </span>
-          ) : (
-            <span className="animate-subtitle-pop leading-tight">
-              {activeSubtitle}
-            </span>
-          )}
-        </div>
-      </div>
-    );
+    return null;
   };
 
   const progressPercent = Math.max(0, Math.min(100, ((currentLocalTime - startSec) / duration) * 100));

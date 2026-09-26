@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database.js';
 import { Project, PipelineStage, Clip } from '../types/server.js';
 import path from 'path';
-import { UPLOADS_DIR } from '../config.js';
+import fs from 'fs';
+import { UPLOADS_DIR, EXPORTS_DIR } from '../config.js';
 import { youtubeService } from '../services/youtubeService.js';
 import { transcriptService } from '../services/transcriptService.js';
 import { retentionAnalyzer } from '../services/retentionAnalyzer.js';
@@ -49,16 +50,49 @@ router.get('/:id', (req: Request, res: Response) => {
 // DELETE /api/projects/:id
 router.delete('/:id', (req: Request, res: Response) => {
   const projectId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const project = db.getProjectById(projectId);
   const deleted = db.deleteProject(projectId);
-  if (!deleted) {
+  if (!deleted && !project) {
     return res.status(404).json({
       success: false,
       message: 'Proyecto no encontrado'
     });
   }
+
+  // Clean up local downloaded video if not sample
+  if (project?.videoInfo?.localVideoPath) {
+    try {
+      const videoPath = project.videoInfo.localVideoPath;
+      if (fs.existsSync(videoPath) && !videoPath.includes('sample_base.mp4')) {
+        fs.unlinkSync(videoPath);
+        console.log(`[Storage] Archivo local eliminado: ${videoPath}`);
+      }
+    } catch (e) {
+      console.warn('Error eliminando video local:', e);
+    }
+  }
+
+  // Clean up exported clips if any
+  if (project?.clips && Array.isArray(project.clips)) {
+    for (const clip of project.clips) {
+      if (clip.exportedUrl) {
+        try {
+          const exportFilename = path.basename(clip.exportedUrl);
+          const exportFilePath = path.join(EXPORTS_DIR, exportFilename);
+          if (fs.existsSync(exportFilePath)) {
+            fs.unlinkSync(exportFilePath);
+            console.log(`[Storage] Clip exportado eliminado: ${exportFilePath}`);
+          }
+        } catch (e) {
+          console.warn('Error eliminando clip exportado:', e);
+        }
+      }
+    }
+  }
+
   res.json({
     success: true,
-    message: 'Proyecto eliminado con éxito'
+    message: 'Proyecto y archivos multimedia eliminados con éxito'
   });
 });
 
@@ -251,7 +285,7 @@ async function runProcessingPipeline(project: Project) {
       metadata: cand.metadata,
       subtitles: cand.subtitles,
       subtitleConfig: {
-        enabled: true,
+        enabled: false,
         style: settings.defaultSubtitleStyle || 'hormozi',
         fontSize: 28,
         textColor: '#FFFFFF',

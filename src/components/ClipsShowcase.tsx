@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { Clip, Project, VideoInfo } from '../types/index.js';
 import { ClipCard } from './ClipCard.js';
-import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal, Download, Loader2 } from 'lucide-react';
+import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal, Download, Loader2, Trash2 } from 'lucide-react';
 
 interface ClipsShowcaseProps {
   clips: Clip[];
   videoInfo: VideoInfo;
   projects?: Project[];
+  activeProjectId?: string;
+  onDeleteProject?: (projectId: string) => void;
   onEditClip: (clip: Clip) => void;
   onExportClip: (clip: Clip) => void;
   exportingClipId?: string | null;
@@ -19,6 +21,8 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
   clips,
   videoInfo,
   projects,
+  activeProjectId,
+  onDeleteProject,
   onEditClip,
   onExportClip,
   exportingClipId,
@@ -135,6 +139,21 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
               <option value="original" className="bg-dark-900 text-white">Orden original</option>
             </select>
           </div>
+
+          {onDeleteProject && activeProjectId && (
+            <button
+              onClick={() => {
+                if (window.confirm('¿Deseas eliminar este video y todos sus clips?')) {
+                  onDeleteProject(activeProjectId);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-dark-800 hover:bg-rose-500/20 active:scale-95 text-slate-400 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 transition-all cursor-pointer text-xs font-mono"
+              title="Eliminar este video y clips"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline text-rose-400 font-semibold">Eliminar Video</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -95,16 +95,23 @@ export const App: React.FC = () => {
   const loadProjects = async () => {
     try {
       const res = await api.getProjects();
-      if (res.success && res.projects && res.projects.length > 0) {
-        setProjects(res.projects);
+      if (res.success) {
+        const loadedProjects = res.projects || [];
+        setProjects(loadedProjects);
         setActiveProject((current) => {
-          if (current) return current;
-          const completedProject = res.projects.find(
+          if (current) {
+            const stillExists = loadedProjects.find((p: Project) => p.id === current.id);
+            if (stillExists) return stillExists;
+          }
+          const completedProject = loadedProjects.find(
             (p: Project) => p.status === 'completed' && p.clips && p.clips.length > 0
           );
           if (completedProject) {
             setVideoInfo(completedProject.videoInfo);
             return completedProject;
+          }
+          if (loadedProjects.length === 0) {
+            setVideoInfo(null);
           }
           return null;
         });
@@ -222,16 +229,21 @@ export const App: React.FC = () => {
 
   // Delete Project
   const handleDeleteProject = async (projectId: string) => {
-    await api.deleteProject(projectId);
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
     if (activeProject?.id === projectId) {
       setActiveProject(null);
       setVideoInfo(null);
     }
-    loadProjects();
+    try {
+      await api.deleteProject(projectId);
+    } catch (err) {
+      console.warn('Error deleting project:', err);
+    }
+    await loadProjects();
     addToast({
       type: 'info',
-      title: 'Proyecto eliminado',
-      description: 'El proyecto fue removido de tu biblioteca.',
+      title: 'Video eliminado',
+      description: 'El video y sus clips fueron eliminados completamente.',
     });
   };
 
@@ -394,6 +406,8 @@ export const App: React.FC = () => {
                     clips={activeProject.clips}
                     videoInfo={activeProject.videoInfo}
                     projects={projects}
+                    activeProjectId={activeProject.id}
+                    onDeleteProject={handleDeleteProject}
                     onEditClip={(clip) => setEditingClip(clip)}
                     onExportClip={handleExportClip}
                     exportingClipId={exportingClipId}
@@ -418,6 +432,8 @@ export const App: React.FC = () => {
                     clips={projects.flatMap((p) => p.clips)}
                     videoInfo={activeProject?.videoInfo || projects[0].videoInfo}
                     projects={projects}
+                    activeProjectId={activeProject?.id}
+                    onDeleteProject={handleDeleteProject}
                     onEditClip={(clip) => setEditingClip(clip)}
                     onExportClip={handleExportClip}
                     exportingClipId={exportingClipId}

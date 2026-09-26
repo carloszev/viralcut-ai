@@ -25,7 +25,7 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   onExport,
 }) => {
   const [clip, setClip] = useState<Clip>({ ...initialClip });
-  const [activeTab, setActiveTab] = useState<'subtitles' | 'reframe' | 'metadata'>('subtitles');
+  const [activeTab, setActiveTab] = useState<'reframe' | 'metadata'>('reframe');
   const [currentTime, setCurrentTime] = useState<number>(initialClip.startTime);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -236,19 +236,7 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
           {/* Right: Tabbed Inspector */}
           <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
             {/* Inspector Navigation Tabs */}
-            <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl bg-dark-950 border border-white/5 shrink-0">
-              <button
-                onClick={() => setActiveTab('subtitles')}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer ${
-                  activeTab === 'subtitles'
-                    ? 'bg-cyber-cyan text-dark-950 shadow-glow-cyan/20'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Type className="w-3.5 h-3.5" />
-                <span>Subtítulos</span>
-              </button>
-
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-dark-950 border border-white/5 shrink-0">
               <button
                 onClick={() => setActiveTab('reframe')}
                 className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer ${
@@ -258,7 +246,7 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
                 }`}
               >
                 <Crop className="w-3.5 h-3.5" />
-                <span>Reencuadre</span>
+                <span>Reencuadre (Enfoque)</span>
               </button>
 
               <button
@@ -270,20 +258,12 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Metadatos</span>
+                <span>Metadatos y Hooks</span>
               </button>
             </div>
 
             {/* Active Tab Content with animation */}
             <div key={activeTab} className="flex-1 overflow-y-auto max-h-[380px] pr-2 animate-fade-in">
-              {activeTab === 'subtitles' && (
-                <SubtitleEditor
-                  subtitles={clip.subtitles}
-                  subtitleConfig={clip.subtitleConfig}
-                  onSubtitlesChange={(subs) => setClip({ ...clip, subtitles: subs })}
-                  onConfigChange={(config) => setClip({ ...clip, subtitleConfig: config })}
-                />
-              )}
 
               {activeTab === 'reframe' && (
                 <SmartReframeControl
