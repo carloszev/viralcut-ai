@@ -76,11 +76,18 @@ export class RenderEngine {
         inputSource = videoInfo.videoSourceUrl;
       }
     }
+
+    const isSample = !videoInfo.videoId || videoInfo.videoId.startsWith('sample_');
     if (!inputSource || (!inputSource.startsWith('http') && !fs.existsSync(inputSource))) {
-      inputSource = fs.existsSync(localBaseFallback)
-        ? localBaseFallback
-        : 'https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/person-bicycle-car-detection.mp4';
+      if (isSample && fs.existsSync(localBaseFallback)) {
+        inputSource = localBaseFallback;
+      } else if (videoInfo.url) {
+        inputSource = videoInfo.url;
+      } else {
+        inputSource = localBaseFallback;
+      }
     }
+    inputSource = inputSource || localBaseFallback;
 
     const startSec = Math.max(0, clip.startTime);
     const durationSec = Math.max(1, clip.duration || (clip.endTime - clip.startTime));

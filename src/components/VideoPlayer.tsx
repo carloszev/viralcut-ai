@@ -203,26 +203,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div className={`relative bg-dark-950 rounded-2xl overflow-hidden group shadow-2xl ${className}`}>
-      {/* Background Poster fallback so container NEVER displays an empty black box */}
-      {posterUrl ? (
-        <img
-          src={posterUrl}
-          alt={clip.metadata?.title || 'Preview'}
-          className="absolute inset-0 w-full h-full object-cover filter brightness-90 -z-0 pointer-events-none"
-          loading="lazy"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-dark-900 via-dark-950 to-dark-900 flex items-center justify-center -z-0 pointer-events-none">
-          <Play className="w-10 h-10 text-cyber-cyan/30" />
-        </div>
-      )}
-
       {/* Video Stream */}
       {hasError ? (
         <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-dark-950/90 backdrop-blur-md text-slate-400 relative z-10">
           <AlertTriangle className="w-8 h-8 text-amber-400 mb-2" />
-          <p className="text-xs font-semibold text-slate-200 mb-1">Stream de video en proceso</p>
-          <p className="text-[10px] text-slate-400 mb-3">Reintentando carga del medio...</p>
+          <p className="text-xs font-semibold text-slate-200 mb-1">Stream de video no disponible</p>
+          <p className="text-[10px] text-slate-400 mb-3">No se pudo cargar el archivo de video.</p>
           <button
             onClick={handleRetryVideo}
             className="px-3 py-1.5 rounded-lg bg-cyber-cyan text-dark-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
@@ -237,28 +223,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           src={videoSrc}
           poster={posterUrl}
           preload="metadata"
-          className="w-full h-full relative z-10"
+          className="w-full h-full relative z-10 bg-black"
           style={getReframeStyle()}
           muted={isMuted}
           playsInline
           onTimeUpdate={handleTimeUpdate}
           onClick={togglePlay}
           onError={() => {
-            if (videoRef.current) {
-              if (isExported && videoRef.current.src && videoRef.current.src.includes('/exports/')) {
-                videoRef.current.src = videoInfo.videoSourceUrl || '/uploads/sample_base.mp4';
-                videoRef.current.load();
-                return;
-              }
-              if (videoRef.current.src && !videoRef.current.src.includes('sample_base.mp4')) {
-                videoRef.current.src = '/uploads/sample_base.mp4';
-                videoRef.current.load();
-                if (isPlaying) {
-                  videoRef.current.play().catch(() => {});
-                }
-                return;
-              }
-            }
+            console.warn('[VideoPlayer] Error al cargar fuente de video:', videoSrc);
             setHasError(true);
           }}
           onLoadedMetadata={() => {

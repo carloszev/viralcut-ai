@@ -60,11 +60,11 @@ export class VideoDownloader {
       const url = youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`;
       const args = [
         '-m', 'yt_dlp',
-        '-f', 'best[height<=720][ext=mp4]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
-        '--recode-video', 'mp4',
-        '--max-filesize', '350M',
+        '-f', 'best[ext=mp4][height<=720]/bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[height<=720]/best',
+        '--merge-output-format', 'mp4',
+        '--max-filesize', '400M',
         '--no-playlist',
-        '--socket-timeout', '20',
+        '--socket-timeout', '30',
         '-o', targetPath,
         url
       ];
@@ -78,9 +78,9 @@ export class VideoDownloader {
         try {
           proc.kill('SIGTERM');
         } catch {}
-        console.warn(`[VideoDownloader] Timeout descargando ${videoId}, usando fallback local.`);
+        console.warn(`[VideoDownloader] Timeout descargando ${videoId}.`);
         resolve(null);
-      }, 45000);
+      }, 90000);
 
       proc.on('close', async (code) => {
         clearTimeout(timeoutHandle);

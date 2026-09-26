@@ -256,12 +256,15 @@ async function runProcessingPipeline(project: Project) {
   // Stage 7: Calculando potencial
   await updateProgress('calculating_potential', 92, 'Calculando scoring final y densidad de información...', 800);
 
-  // Wait for real video download if still downloading (up to 15s)
-  const resolvedLocalUrl = await Promise.race([downloadPromise, new Promise<null>((r) => setTimeout(() => r(null), 15000))]);
-  if (resolvedLocalUrl) {
-    project.videoInfo.videoSourceUrl = resolvedLocalUrl;
-    project.videoInfo.localVideoPath = path.join(UPLOADS_DIR, path.basename(resolvedLocalUrl));
-  } else if (!project.videoInfo.videoSourceUrl) {
+  // Stage 8: Sincronizando video original
+  if (!isSample) {
+    await updateProgress('preparing_clips', 94, 'Sincronizando video fuente para cortes precisos...', 300);
+    const resolvedLocalUrl = await downloadPromise;
+    if (resolvedLocalUrl) {
+      project.videoInfo.videoSourceUrl = resolvedLocalUrl;
+      project.videoInfo.localVideoPath = path.join(UPLOADS_DIR, path.basename(resolvedLocalUrl));
+    }
+  } else {
     project.videoInfo.videoSourceUrl = '/uploads/sample_base.mp4';
     project.videoInfo.localVideoPath = path.join(UPLOADS_DIR, 'sample_base.mp4');
   }
