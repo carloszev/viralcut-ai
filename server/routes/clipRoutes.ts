@@ -140,9 +140,10 @@ router.get('/download/:filename', (req: Request, res: Response) => {
   try {
     const rawFilename = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename;
     const cleanFilename = path.basename(rawFilename);
-    const filePath = path.join(EXPORTS_DIR, cleanFilename);
+    const resolvedExportsDir = path.resolve(EXPORTS_DIR);
+    const resolvedPath = path.resolve(EXPORTS_DIR, cleanFilename);
 
-    if (!fs.existsSync(filePath)) {
+    if (!resolvedPath.startsWith(resolvedExportsDir) || !fs.existsSync(resolvedPath)) {
       return res.status(404).json({
         success: false,
         message: 'El archivo de video no existe o ha expirado.'
@@ -150,18 +151,20 @@ router.get('/download/:filename', (req: Request, res: Response) => {
     }
 
     const downloadName = req.query.name 
-      ? path.basename(String(req.query.name)).replace(/["\r\n]/g, '_') 
+      ? path.basename(String(req.query.name)).replace(/["\r\n\0]/g, '_') 
       : cleanFilename;
-    res.setHeader('Content-Type', 'video/mp4');
-    res.download(filePath, downloadName, (err) => {
+
+    res.download(resolvedPath, downloadName, (err) => {
       if (err && !res.headersSent) {
-        console.warn('Download error:', err);
-        res.status(500).send('Error al descargar el archivo.');
+        console.warn('Download stream note:', err.message);
+        res.status(500).json({ success: false, message: 'Error al descargar el archivo.' });
       }
     });
   } catch (err: any) {
     console.error('Error in /api/clips/download/:filename:', err);
-    res.status(500).json({ success: false, message: 'Error procesando la descarga.' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error procesando la descarga.' });
+    }
   }
 });
 

@@ -68,7 +68,13 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   };
 
   const handleSave = () => {
-    onSave(clip);
+    const updated: Clip = {
+      ...clip,
+      exportStatus: 'idle',
+      exportedUrl: undefined,
+    };
+    onSave(updated);
+    setClip(updated);
     setHasSaved(true);
     setTimeout(() => setHasSaved(false), 2000);
   };
@@ -80,6 +86,12 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
       const url = await onExport(clip);
       if (url) {
         setDownloadUrl(url);
+        setClip((prev) => ({
+          ...prev,
+          exportedUrl: url,
+          exportStatus: 'completed',
+          exportProgress: 100,
+        }));
         setExportMessage('¡Guardado en Documentos\\Videos!');
         confetti({
           particleCount: 80,

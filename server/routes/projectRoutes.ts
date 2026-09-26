@@ -223,7 +223,15 @@ async function runProcessingPipeline(project: Project) {
   await updateProgress('calculating_potential', 92, 'Calculando scoring final y densidad de información...', 800);
 
   // Wait for real video download if still downloading (up to 15s)
-  await Promise.race([downloadPromise, new Promise((r) => setTimeout(r, 15000))]);
+  const resolvedLocalUrl = await Promise.race([downloadPromise, new Promise<null>((r) => setTimeout(() => r(null), 15000))]);
+  if (resolvedLocalUrl) {
+    project.videoInfo.videoSourceUrl = resolvedLocalUrl;
+    project.videoInfo.localVideoPath = path.join(UPLOADS_DIR, path.basename(resolvedLocalUrl));
+  } else if (!project.videoInfo.videoSourceUrl) {
+    project.videoInfo.videoSourceUrl = '/uploads/sample_base.mp4';
+    project.videoInfo.localVideoPath = path.join(UPLOADS_DIR, 'sample_base.mp4');
+  }
+  db.saveProject(project);
 
   // Stage 8: Preparando clips
   await updateProgress('preparing_clips', 98, 'Construyendo clips verticales 9:16 con subtítulos dinámicos...', 900);

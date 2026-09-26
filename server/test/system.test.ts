@@ -3,6 +3,7 @@ import { transcriptService } from '../services/transcriptService.js';
 import { retentionAnalyzer } from '../services/retentionAnalyzer.js';
 import { smartReframeService } from '../services/smartReframeService.js';
 import { renderEngine } from '../services/renderEngine.js';
+import { videoDownloader } from '../services/videoDownloader.js';
 import { db } from '../db/database.js';
 import { Project, Clip } from '../types/server.js';
 import fs from 'fs';
@@ -184,6 +185,16 @@ async function runComprehensiveAudit() {
   } catch (err: any) {
     assert(false, 'Renderizado de clip de prueba', err.message);
   }
+
+  // -------------------------------------------------------------
+  // TEST SECTION 7: Video Downloader & File Integrity Validation
+  // -------------------------------------------------------------
+  console.log('\n--- 7. Verificación de Integridad de Archivos de Video ---');
+  const validSampleCheck = await videoDownloader.isVideoValid(path.join(process.cwd(), 'uploads', 'sample_base.mp4'));
+  assert(validSampleCheck === true, 'sample_base.mp4 tiene moov atom y duración válidos');
+
+  const invalidFakeCheck = await videoDownloader.isVideoValid(path.join(process.cwd(), 'uploads', 'fake_ghost.mp4'));
+  assert(invalidFakeCheck === false, 'Rechaza archivo inexistente o vacío');
 
   // -------------------------------------------------------------
   // FINAL SCORECARD

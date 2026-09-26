@@ -1,9 +1,36 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import ffmpeg from 'fluent-ffmpeg';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import { UPLOADS_DIR } from '../config.js';
 
+if (ffprobeInstaller && ffprobeInstaller.path) {
+  ffmpeg.setFfprobePath(ffprobeInstaller.path);
+}
+
 export class VideoDownloader {
+  /**
+   * Verifica que el archivo de video tenga una estructura MP4 válida y duración legible con ffprobe
+   */
+  public async isVideoValid(filePath: string): Promise<boolean> {
+    if (!fs.existsSync(filePath)) return false;
+    try {
+      if (fs.statSync(filePath).size < 10000) return false;
+      return new Promise<boolean>((resolve) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+          if (err || !metadata || !metadata.format || !(Number(metadata.format.duration) > 0)) {
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
+      });
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Descarga el video de YouTube en resolución optimizada (hasta 720p) de forma no bloqueante o síncrona
    */
@@ -16,9 +43,15 @@ export class VideoDownloader {
     const targetFilename = `${cleanVideoId}.mp4`;
     const targetPath = path.join(UPLOADS_DIR, targetFilename);
 
-    // Si ya existe el video descargado localmente, retornarlo inmediatamente
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).size > 100000) {
-      return `/uploads/${targetFilename}`;
+    // Si ya existe el video descargado localmente, verificar integridad real antes de retornarlo
+    if (fs.existsSync(targetPath)) {
+      const valid = await this.isVideoValid(targetPath);
+      if (valid) {
+        return `/uploads/${targetFilename}`;
+      } else {
+        console.warn(`[VideoDownloader] Video en caché ${targetFilename} inválido o sin moov atom. Eliminando...`);
+        try { fs.unlinkSync(targetPath); } catch {}
+      }
     }
 
     console.log(`[VideoDownloader] Iniciando descarga para ${videoId}...`);
@@ -49,24 +82,31 @@ export class VideoDownloader {
         resolve(null);
       }, 45000);
 
-      proc.on('close', (code) => {
+      proc.on('close', async (code) => {
         clearTimeout(timeoutHandle);
-        if (code === 0 && fs.existsSync(targetPath) && fs.statSync(targetPath).size > 100000) {
-          console.log(`[VideoDownloader] Video descargado con éxito: ${targetFilename} (${(fs.statSync(targetPath).size / 1024 / 1024).toFixed(1)} MB)`);
-          resolve(`/uploads/${targetFilename}`);
-        } else {
-          console.warn(`[VideoDownloader] yt-dlp finalizó con código ${code}, usando fallback local.`);
-          // Clean up incomplete or partial artifacts
-          try {
-            const files = fs.readdirSync(UPLOADS_DIR);
-            for (const f of files) {
-              if (f.startsWith(cleanVideoId) && (f.endsWith('.part') || f.endsWith('.m4a') || f.endsWith('.ytdl'))) {
-                fs.unlinkSync(path.join(UPLOADS_DIR, f));
-              }
-            }
-          } catch {}
-          resolve(null);
+        if (code === 0 && fs.existsSync(targetPath)) {
+          const isValid = await this.isVideoValid(targetPath);
+          if (isValid) {
+            console.log(`[VideoDownloader] Video descargado y verificado con éxito: ${targetFilename} (${(fs.statSync(targetPath).size / 1024 / 1024).toFixed(1)} MB)`);
+            resolve(`/uploads/${targetFilename}`);
+            return;
+          } else {
+            console.warn(`[VideoDownloader] El video descargado falló verificación de integridad (moov atom corrupto).`);
+            try { fs.unlinkSync(targetPath); } catch {}
+          }
         }
+
+        console.warn(`[VideoDownloader] yt-dlp finalizó con código ${code}, usando fallback local.`);
+        // Clean up incomplete or partial artifacts
+        try {
+          const files = fs.readdirSync(UPLOADS_DIR);
+          for (const f of files) {
+            if (f.startsWith(cleanVideoId) && (f.endsWith('.part') || f.endsWith('.m4a') || f.endsWith('.ytdl'))) {
+              fs.unlinkSync(path.join(UPLOADS_DIR, f));
+            }
+          }
+        } catch {}
+        resolve(null);
       });
 
       proc.on('error', (err) => {

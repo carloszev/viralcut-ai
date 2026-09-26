@@ -8,6 +8,7 @@ import { ClipsShowcase } from './components/ClipsShowcase.js';
 import { VideoEditorModal } from './components/VideoEditor/VideoEditorModal.js';
 import { ProjectsView } from './components/ProjectsView.js';
 import { SettingsView } from './components/SettingsView.js';
+import { ToastContainer, ToastMessage } from './components/Toast.js';
 import { api } from './services/api.js';
 import { AppSettings, Clip, PipelineStage, Project, VideoInfo } from './types/index.js';
 import { FolderCheck, FolderOpen, X, LayoutDashboard, FolderKanban, Film, Settings } from 'lucide-react';
@@ -28,6 +29,18 @@ export const App: React.FC = () => {
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
   const [exportingClipId, setExportingClipId] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<{ message: string; fileName: string } | null>(null);
+
+  // Global Toast Notifications
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
+    const id = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+    setToasts((prev) => [...prev, { ...toast, id }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Auto-dismiss exportNotice safely with timer cleanup
   useEffect(() => {
@@ -215,6 +228,11 @@ export const App: React.FC = () => {
       setVideoInfo(null);
     }
     loadProjects();
+    addToast({
+      type: 'info',
+      title: 'Proyecto eliminado',
+      description: 'El proyecto fue removido de tu biblioteca.',
+    });
   };
 
   // Clip update in modal editor
@@ -231,9 +249,19 @@ export const App: React.FC = () => {
           setActiveProject({ ...activeProject, clips: updatedClips });
         }
         loadProjects();
+        addToast({
+          type: 'success',
+          title: 'Cambios guardados',
+          description: `Clip #${updatedClip.clipNumber} actualizado con éxito.`,
+        });
       }
     } catch (e) {
       console.error('Error saving clip changes:', e);
+      addToast({
+        type: 'error',
+        title: 'Error al guardar',
+        description: 'No se pudieron persistir los cambios del clip.',
+      });
     }
   };
 
@@ -256,7 +284,7 @@ export const App: React.FC = () => {
         }
         loadProjects();
 
-        // Trigger browser download safely without navigating away or reloading tab
+        // Trigger browser download safely without navigating away or opening blank tabs
         const cleanTitle = (clip.metadata?.title || `clip_${clip.clipNumber || 1}`)
           .replace(/[/\\?%*:|"<>]/g, '_')
           .replace(/\s+/g, '_')
@@ -267,8 +295,6 @@ export const App: React.FC = () => {
         const link = document.createElement('a');
         link.href = downloadUrl;
         link.setAttribute('download', fileName);
-        link.setAttribute('target', '_blank');
-        link.setAttribute('rel', 'noopener noreferrer');
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
@@ -278,16 +304,27 @@ export const App: React.FC = () => {
           }
         }, 1500);
 
-        // Feedback de guardado en Documentos/Videos
+        // Feedback visual y toast notification
         setExportNotice({
           message: '¡Clip guardado exitosamente en tu carpeta de Videos (Documentos\\Videos)!',
           fileName,
+        });
+
+        addToast({
+          type: 'success',
+          title: '¡Clip 9:16 exportado!',
+          description: `Guardado en Videos y descargado: ${fileName}`,
         });
 
         return res.exportedUrl;
       }
     } catch (e) {
       console.error('Error exporting clip:', e);
+      addToast({
+        type: 'error',
+        title: 'Error de exportación',
+        description: 'Ocurrió un error renderizando el clip con FFmpeg.',
+      });
     } finally {
       setExportingClipId(null);
     }
@@ -510,6 +547,9 @@ export const App: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Global Futuristic Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </div>
   );
 };
