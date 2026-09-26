@@ -67,6 +67,20 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             {category}
           </span>
         </div>
+
+        {/* Status indicator: MP4 Cortado vs Corte 9:16 */}
+        <div className="absolute bottom-3 left-3 z-30 pointer-events-none">
+          {clip.exportStatus === 'completed' && clip.exportedUrl ? (
+            <span className="px-2 py-0.5 rounded-lg bg-emerald-400 text-dark-950 text-[10px] font-black font-mono shadow-glow-green/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-dark-950" />
+              <span>MP4 CORTADO</span>
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-lg bg-dark-900/80 border border-white/10 text-cyber-cyan text-[10px] font-mono backdrop-blur">
+              Corte 9:16 ({formatTime(clip.duration)})
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Middle: Information Details */}

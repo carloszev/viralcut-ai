@@ -82,8 +82,19 @@ export const App: React.FC = () => {
   const loadProjects = async () => {
     try {
       const res = await api.getProjects();
-      if (res.success && res.projects) {
+      if (res.success && res.projects && res.projects.length > 0) {
         setProjects(res.projects);
+        setActiveProject((current) => {
+          if (current) return current;
+          const completedProject = res.projects.find(
+            (p: Project) => p.status === 'completed' && p.clips && p.clips.length > 0
+          );
+          if (completedProject) {
+            setVideoInfo(completedProject.videoInfo);
+            return completedProject;
+          }
+          return null;
+        });
       }
     } catch (e) {
       console.error('Failed to load projects:', e);

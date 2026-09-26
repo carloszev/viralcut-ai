@@ -30,11 +30,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [activeWordIndex, setActiveWordIndex] = useState<number>(-1);
   const [hasError, setHasError] = useState(false);
 
-  const videoSrc = videoInfo.videoSourceUrl || '/uploads/sample_base.mp4';
+  const isExported = clip.exportStatus === 'completed' && !!clip.exportedUrl;
+  const videoSrc = isExported ? clip.exportedUrl! : (videoInfo.videoSourceUrl || '/uploads/sample_base.mp4');
   const posterUrl = clip.thumbnailUrl || videoInfo.thumbnailUrl;
 
-  const startSec = Math.max(0, clip.startTime);
-  const endSec = Math.max(startSec + 1, clip.endTime);
+  const startSec = isExported ? 0 : Math.max(0, clip.startTime);
+  const endSec = isExported ? Math.max(0.1, clip.duration) : Math.max(startSec + 1, clip.endTime);
   const duration = Math.max(0.1, endSec - startSec);
 
   // Sync external time if provided
@@ -58,12 +59,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [startSec, endSec]);
 
+  // Seek to clip start time on mount / clip change
+  useEffect(() => {
+    setCurrentLocalTime(startSec);
+    if (videoRef.current) {
+      const dur = videoRef.current.duration;
+      const targetTime = (dur && dur > 0 && startSec >= dur) ? (startSec % dur) : startSec;
+      try {
+        videoRef.current.currentTime = targetTime;
+      } catch (_) {}
+    }
+  }, [clip.id, startSec, isExported]);
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
+      const cur = videoRef.current.currentTime;
       const dur = videoRef.current.duration;
-      if (dur && dur > 0 && videoRef.current.currentTime >= dur) {
-        videoRef.current.currentTime = startSec % dur;
+      if (cur < startSec || cur >= endSec || (dur && dur > 0 && cur >= dur - 0.2)) {
+        const safeStart = (dur && dur > 0 && startSec >= dur) ? (startSec % dur) : startSec;
+        videoRef.current.currentTime = safeStart;
+        setCurrentLocalTime(safeStart);
       }
       videoRef.current.play().then(() => {
         setIsPlaying(true);
@@ -123,6 +139,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Reframe offset style calculation
   const getReframeStyle = () => {
+    if (isExported) {
+      return {
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover' as const,
+      };
+    }
+
     const { mode, horizontalOffsetPercent, scaleFactor, activeSpeakerTracking } = clip.reframeConfig;
     const aspect = clip.aspectRatio;
 
@@ -140,12 +164,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const totalOffset = horizontalOffsetPercent + trackingPan;
     const scale = Math.max(1.0, scaleFactor || 1.0);
 
-    // Transform video inside container
+    // In a 9:16 vertical box, objectFit: 'cover' naturally fills the vertical height and crops horizontal sides
     return {
       width: '100%',
       height: '100%',
       objectFit: 'cover' as const,
-      transform: `scale(${scale * (aspect === '9:16' ? 1.77 : 1.33)}) translateX(${totalOffset * -0.5}%)`,
+      transform: `scale(${scale}) translateX(${totalOffset * -0.5}%)`,
       transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)',
     };
   };
@@ -271,13 +295,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           onTimeUpdate={handleTimeUpdate}
           onClick={togglePlay}
           onError={() => {
-            if (videoRef.current && videoRef.current.src && !videoRef.current.src.includes('sample_base.mp4')) {
-              videoRef.current.src = '/uploads/sample_base.mp4';
-              videoRef.current.load();
-              if (isPlaying) {
-                videoRef.current.play().catch(() => {});
+            if (videoRef.current) {
+              if (isExported && videoRef.current.src && videoRef.current.src.includes('/exports/')) {
+                videoRef.current.src = videoInfo.videoSourceUrl || '/uploads/sample_base.mp4';
+                videoRef.current.load();
+                return;
               }
-              return;
+              if (videoRef.current.src && !videoRef.current.src.includes('sample_base.mp4')) {
+                videoRef.current.src = '/uploads/sample_base.mp4';
+                videoRef.current.load();
+                if (isPlaying) {
+                  videoRef.current.play().catch(() => {});
+                }
+                return;
+              }
             }
             setHasError(true);
           }}
@@ -286,13 +317,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               const dur = videoRef.current.duration;
               const safeTime = (dur && dur > 0 && startSec >= dur) ? (startSec % dur) : startSec;
               videoRef.current.currentTime = safeTime;
+              setCurrentLocalTime(safeTime);
             }
           }}
           onCanPlay={() => {
-            if (videoRef.current && videoRef.current.paused && videoRef.current.currentTime === 0 && startSec > 0) {
-              const dur = videoRef.current.duration;
-              const safeTime = (dur && dur > 0 && startSec >= dur) ? (startSec % dur) : startSec;
-              videoRef.current.currentTime = safeTime;
+            if (videoRef.current) {
+              const cur = videoRef.current.currentTime;
+              if (cur < startSec || cur >= endSec) {
+                const dur = videoRef.current.duration;
+                const safeTime = (dur && dur > 0 && startSec >= dur) ? (startSec % dur) : startSec;
+                videoRef.current.currentTime = safeTime;
+                setCurrentLocalTime(safeTime);
+              }
             }
           }}
           onEnded={() => {
