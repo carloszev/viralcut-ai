@@ -1,7 +1,7 @@
 {
   "name": "probando-un-app",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "ViralCut AI - Automated Viral Video Repurposing Engine",
   "type": "module",
   "scripts": {
     "dev:server": "tsx watch --exclude \"data/**\" --exclude \"exports/**\" --exclude \"uploads/**\" --exclude \"**/*.mp4\" --exclude \"**/*.part\" --exclude \"**/*.tmp*\" server/index.ts",

@@ -29,7 +29,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             <h1 className="text-xl font-extrabold tracking-tight font-display text-white group-hover:text-cyber-cyan transition-colors">
               ViralCut <span className="text-cyber-cyan text-xs uppercase px-1.5 py-0.5 rounded bg-cyber-cyan/10 border border-cyber-cyan/30 ml-1">AI</span>
             </h1>
-            <p className="text-[11px] text-slate-400 font-mono tracking-wider">SMART SHORT ENGINE</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] text-slate-400 font-mono tracking-wider">SMART SHORT ENGINE</p>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyber-cyan/15 text-cyber-cyan border border-cyber-cyan/30">
+                v1.1
+              </span>
+            </div>
           </div>
         </div>
 

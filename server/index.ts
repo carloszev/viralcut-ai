@@ -40,6 +40,7 @@ app.use('/api/settings', settingsRoutes);
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'online',
+    version: '1.1.0',
     service: 'ViralCut AI Engine',
     timestamp: new Date().toISOString()
   });

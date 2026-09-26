@@ -37,6 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         <span className="text-slate-200">viralcut-ai</span>
         <span>/</span>
         <span className="capitalize text-cyber-cyan">{currentTab}</span>
+        <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyber-cyan/15 text-cyber-cyan border border-cyber-cyan/30 shadow-glow-cyan/20">
+          v1.1
+        </span>
       </div>
 
       {/* Right controls */}

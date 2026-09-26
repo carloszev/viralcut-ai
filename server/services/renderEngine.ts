@@ -119,6 +119,7 @@ export class RenderEngine {
         .videoCodec('libx264')
         .audioCodec('aac')
         .audioBitrate('192k')
+        .audioFilters('loudnorm=I=-16:LRA=11:TP=-1.5')
         .outputOptions([
           '-preset veryfast',
           '-crf 23',

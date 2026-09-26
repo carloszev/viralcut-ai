@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Clip, Project, VideoInfo } from '../types/index.js';
 import { ClipCard } from './ClipCard.js';
-import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal, Download, Loader2 } from 'lucide-react';
 
 interface ClipsShowcaseProps {
   clips: Clip[];
@@ -25,6 +25,8 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Todas');
   const [sortBy, setSortBy] = useState<SortOption>('potential');
+  const [isBatchExporting, setIsBatchExporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const categories: CategoryFilter[] = [
     'Todas',
@@ -66,6 +68,21 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
     return result;
   }, [clips, selectedCategory, sortBy]);
 
+  const handleExportAll = async () => {
+    if (isBatchExporting || filteredClips.length === 0) return;
+    setIsBatchExporting(true);
+    for (let i = 0; i < filteredClips.length; i++) {
+      setBatchProgress({ current: i + 1, total: filteredClips.length });
+      const clip = filteredClips[i];
+      if (clip.exportStatus !== 'completed') {
+        await onExportClip(clip);
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+    setIsBatchExporting(false);
+    setBatchProgress(null);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fade-in-up">
       {/* Header with count and Title */}
@@ -83,8 +100,27 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
           </p>
         </div>
 
-        {/* Sort selector */}
-        <div className="flex items-center gap-3">
+        {/* Actions bar: Export All + Sort selector */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleExportAll}
+            disabled={isBatchExporting || !!exportingClipId}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyber-cyan to-cyan-400 text-dark-950 font-bold text-xs uppercase tracking-wider shadow-glow-cyan/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+            title="Exportar todos los clips visibles automáticamente"
+          >
+            {isBatchExporting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Exportando {batchProgress?.current}/{batchProgress?.total}...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Exportar Todos ({filteredClips.length})</span>
+              </>
+            )}
+          </button>
+
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-dark-850/80 border border-white/10 text-xs text-slate-300">
             <ArrowUpDown className="w-3.5 h-3.5 text-cyber-cyan" />
             <span className="text-slate-400 font-mono">Ordenar por:</span>

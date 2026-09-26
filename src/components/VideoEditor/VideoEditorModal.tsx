@@ -5,7 +5,7 @@ import { Timeline } from './Timeline.js';
 import { SubtitleEditor } from './SubtitleEditor.js';
 import { SmartReframeControl } from './SmartReframeControl.js';
 import { MetadataPanel } from './MetadataPanel.js';
-import { X, Save, Download, Sparkles, Type, Crop, FileText, Check, Loader2, FolderOpen } from 'lucide-react';
+import { X, Save, Download, Sparkles, Type, Crop, FileText, Check, Loader2, FolderOpen, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../../services/api.js';
 
@@ -31,6 +31,7 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(clip.exportedUrl || null);
   const [hasSaved, setHasSaved] = useState(false);
+  const [showSafeZones, setShowSafeZones] = useState(false);
 
   // Lock body scroll while modal is open
   useEffect(() => {
@@ -133,9 +134,9 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
 
         {/* Editor Body */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 overflow-y-auto">
-          {/* Left: Video Preview Player (9:16 vertical) */}
+          {/* Left: Video Preview Player (responsive to aspect ratio) */}
           <div className="lg:col-span-5 flex flex-col items-center justify-center bg-dark-950 rounded-2xl p-4 border border-white/5 relative min-h-[420px]">
-            <div className="w-full max-w-[280px] aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative">
+            <div className={`w-full max-w-[280px] ${clip.aspectRatio === '1:1' ? 'aspect-square' : clip.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[9/16]'} rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative transition-all duration-300`}>
               <VideoPlayer
                 clip={clip}
                 videoInfo={videoInfo}
@@ -143,8 +144,79 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
                 onTimeUpdate={(t) => setCurrentTime(t)}
                 className="w-full h-full"
               />
+
+              {/* TikTok / Reels / Shorts Safe Zones Overlay */}
+              {showSafeZones && clip.aspectRatio === '9:16' && (
+                <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between">
+                  {/* Top Header UI Zone */}
+                  <div className="h-[14%] bg-red-500/20 border-b border-red-500/40 flex items-center justify-center">
+                    <span className="text-[9px] font-mono text-red-200 tracking-wider bg-black/60 px-1.5 py-0.5 rounded">
+                      INTERFAZ SUPERIOR
+                    </span>
+                  </div>
+
+                  {/* Middle Safe Zone Guide */}
+                  <div className="flex-1 flex">
+                    <div className="flex-1 border-2 border-dashed border-cyber-cyan/50 m-2 rounded-lg flex items-center justify-center relative">
+                      <span className="text-[10px] font-mono text-cyan-300 font-bold bg-dark-950/80 px-2 py-0.5 rounded border border-cyber-cyan/30">
+                        ZONA SEGURA
+                      </span>
+                    </div>
+                    {/* Right interaction column */}
+                    <div className="w-[18%] bg-red-500/20 border-l border-red-500/40 flex flex-col items-center justify-center gap-2 p-1">
+                      <span className="text-[7px] font-mono text-red-200 uppercase text-center leading-tight">
+                        Likes & Shares
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Captions & Audio Zone */}
+                  <div className="h-[22%] bg-red-500/20 border-t border-red-500/40 flex items-center justify-center">
+                    <span className="text-[9px] font-mono text-red-200 tracking-wider bg-black/60 px-1.5 py-0.5 rounded">
+                      DESCRIPCIÓN Y AUDIO
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-            <span className="text-[10px] font-mono text-slate-400 mt-2">
+
+            {/* Controls Bar for Preview */}
+            <div className="flex items-center gap-2 mt-3 w-full max-w-[280px] justify-between">
+              {/* Safe zone toggle */}
+              <button
+                type="button"
+                onClick={() => setShowSafeZones(!showSafeZones)}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                  showSafeZones
+                    ? 'bg-cyber-cyan/15 border-cyber-cyan/40 text-cyber-cyan'
+                    : 'bg-dark-900 border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                }`}
+                title="Superponer guías de interfaz para TikTok, Reels y Shorts"
+              >
+                <Eye className="w-3 h-3" />
+                <span>{showSafeZones ? 'Ocultar Zonas' : 'Zonas Seguras'}</span>
+              </button>
+
+              {/* Aspect Ratio switcher */}
+              <div className="flex rounded-lg bg-dark-900 border border-white/10 p-0.5 text-[10px] font-mono">
+                {(['9:16', '1:1', '16:9'] as const).map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    onClick={() => setClip({ ...clip, aspectRatio: ratio })}
+                    className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                      clip.aspectRatio === ratio
+                        ? 'bg-cyber-cyan text-dark-950 font-bold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <span className="text-[10px] font-mono text-slate-400 mt-1.5">
               Previsualización en tiempo real — {clip.aspectRatio}
             </span>
           </div>

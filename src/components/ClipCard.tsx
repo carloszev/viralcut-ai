@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clip, VideoInfo } from '../types/index.js';
 import { VideoPlayer } from './VideoPlayer.js';
-import { Edit3, Download, Sparkles, Clock, Tag, Flame, CheckCircle2, Loader2, Info } from 'lucide-react';
+import { Edit3, Download, Sparkles, Clock, Tag, Flame, CheckCircle2, Loader2, Info, Copy, Check } from 'lucide-react';
 import { formatTime } from '../utils/formatters.js';
 
 interface ClipCardProps {
@@ -20,7 +20,16 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   isExporting = false,
 }) => {
   const [showRationale, setShowRationale] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { potentialScore, scoreRationale, scoreBreakdown, hook, category, title } = clip.metadata;
+
+  const handleCopyCaption = () => {
+    const hashtags = (clip.metadata.hashtags || []).join(' ');
+    const text = `${title}\n\n"${hook}"\n\n${clip.metadata.description || ''}\n\n${hashtags}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Score color grading
   const getScoreColor = (score: number) => {
@@ -84,13 +93,25 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               <Clock className="w-3 h-3 text-slate-400" />
               {formatTime(clip.duration)}
             </span>
-            <button
-              onClick={() => setShowRationale(!showRationale)}
-              className="text-[11px] text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <Info className="w-3 h-3" />
-              <span>Señales</span>
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleCopyCaption}
+                className="text-[11px] text-slate-400 hover:text-cyber-cyan flex items-center gap-1 cursor-pointer transition-colors"
+                title="Copiar título, descripción y hashtags para publicar en redes"
+              >
+                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span className={copied ? "text-emerald-400 font-bold" : ""}>
+                  {copied ? "¡Copiado!" : "Copiar"}
+                </span>
+              </button>
+              <button
+                onClick={() => setShowRationale(!showRationale)}
+                className="text-[11px] text-cyber-cyan hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Info className="w-3 h-3" />
+                <span>Señales</span>
+              </button>
+            </div>
           </div>
 
           {/* Collapsible Detailed Rationale */}
