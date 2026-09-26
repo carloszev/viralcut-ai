@@ -1,9 +1,11 @@
 services:
   - type: web
     name: viralcut-ai
-    runtime: docker
+    runtime: node
     plan: free
     region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
