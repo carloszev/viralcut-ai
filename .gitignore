@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Production build output
+dist/
+
+# Local media uploads & exported video files
+uploads/*.mp4
+uploads/*.part
+uploads/*.m4a
+uploads/*.ytdl
+exports/*.mp4
+
+# Local database runtime data
+data/*.json
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System
+Thumbs.db
+.DS_Store

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: viralcut-ai
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /api/health
+    autoDeploy: true
