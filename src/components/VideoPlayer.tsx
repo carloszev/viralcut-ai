@@ -71,6 +71,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [clip.id, startSec, isExported]);
 
+  // Clean unmount release
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute('src');
+          videoRef.current.load();
+        } catch (_) {}
+      }
+    };
+  }, []);
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
@@ -338,6 +351,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               videoRef.current.currentTime = safeStart;
               videoRef.current.play().catch(() => {});
             }
+          }}
+          onPlay={(e) => {
+            setIsPlaying(true);
+            document.querySelectorAll('video').forEach((v) => {
+              if (v !== e.currentTarget && !v.paused) {
+                v.pause();
+              }
+            });
+          }}
+          onPause={() => {
+            setIsPlaying(false);
           }}
         />
       )}

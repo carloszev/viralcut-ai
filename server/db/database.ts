@@ -30,6 +30,14 @@ class Database {
     process.on('beforeExit', () => {
       this.flushSync();
     });
+    process.on('SIGINT', () => {
+      this.flushSync();
+      process.exit(0);
+    });
+    process.on('SIGTERM', () => {
+      this.flushSync();
+      process.exit(0);
+    });
   }
 
   private init() {

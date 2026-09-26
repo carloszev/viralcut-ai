@@ -243,8 +243,9 @@ export const App: React.FC = () => {
       const res = await api.updateClip(targetProjectId, updatedClip.id, updatedClip);
       if (res.success && res.clip) {
         if (activeProject && activeProject.id === targetProjectId) {
+          const savedClip = res.clip;
           const updatedClips = activeProject.clips.map((c) =>
-            c.id === updatedClip.id ? res.clip : c
+            c.id === updatedClip.id ? savedClip : c
           );
           setActiveProject({ ...activeProject, clips: updatedClips });
         }
