@@ -70,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
           <span className="w-2 h-2 rounded-full bg-cyber-green animate-pulse" />
           <span>Motor Local Activo</span>
         </span>
-        <span className="text-[10px] text-slate-600">v1.0</span>
+        <span className="text-[10px] text-slate-600">v1.1</span>
       </div>
     </aside>
   );

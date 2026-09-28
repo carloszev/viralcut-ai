@@ -28,7 +28,10 @@ app.use('/exports', (req, res, next) => {
   }
   next();
 }, express.static(EXPORTS_DIR));
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Accept-Ranges', 'bytes');
+  next();
+}, express.static(UPLOADS_DIR));
 
 // API Routes
 app.use('/api/videos', videoRoutes);
@@ -47,7 +50,14 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // Production Frontend Static Files (Single unified container)
-const DIST_DIR = path.resolve(process.cwd(), 'dist');
+const possibleDistDirs = [
+  process.env.VIRALCUT_DIST_DIR,
+  path.resolve(process.cwd(), 'dist'),
+  path.resolve(__dirname, '..', 'dist'),
+  path.resolve(__dirname, 'dist')
+].filter(Boolean) as string[];
+
+const DIST_DIR = possibleDistDirs.find(d => fs.existsSync(path.join(d, 'index.html'))) || path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR));
   app.use((req: Request, res: Response, next: NextFunction) => {

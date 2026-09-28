@@ -1,6 +1,9 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import { SubtitleSegment, SubtitleWord } from '../types/server.js';
 import { v4 as uuidv4 } from 'uuid';
+import { whisperService } from './whisperService.js';
+import fs from 'fs';
+import path from 'path';
 
 export class TranscriptService {
   /**
@@ -37,89 +40,117 @@ export class TranscriptService {
   }
 
   /**
-   * Extrae la transcripción del video con timeout estricto para evitar bloqueos
+   * Extrae la transcripción del video con soporte para Whisper (Groq/OpenAI) y fallback
    */
-  public async getTranscript(videoId: string, duration: number, sampleId?: string): Promise<SubtitleSegment[]> {
+  public async getTranscript(
+    videoId: string,
+    duration: number,
+    sampleId?: string,
+    localVideoPath?: string
+  ): Promise<SubtitleSegment[]> {
     // 1. Check if it's one of our curated sample videos
     const isSample = videoId.startsWith('sample_') || (Boolean(sampleId) && sampleId!.startsWith('sample_'));
     if (isSample) {
       return this.getCuratedSampleTranscript(sampleId || videoId, duration);
     }
 
-    // 2. Try fetching from YouTube directly with a strict 3.5s timeout
-    try {
-      const fetchPromise = YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
-        .catch(() => YoutubeTranscript.fetchTranscript(videoId));
+    // 2. Try fetching official YouTube captions if it's a YouTube video
+    const isYouTube = videoId && !videoId.startsWith('local_') && !videoId.startsWith('sample_');
+    if (isYouTube) {
+      try {
+        console.log(`[TranscriptService] Consultando subtítulos oficiales de YouTube para ${videoId}...`);
+        const fetchPromise = YoutubeTranscript.fetchTranscript(videoId, { lang: 'es' })
+          .catch(() => YoutubeTranscript.fetchTranscript(videoId));
 
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+        const rawTranscripts: any = await Promise.race([fetchPromise, timeoutPromise]);
 
-      const rawTranscripts: any = await Promise.race([fetchPromise, timeoutPromise]);
+        if (rawTranscripts && Array.isArray(rawTranscripts) && rawTranscripts.length > 0) {
+          // Group small fragments into coherent subtitle segments (around 3 to 6 seconds each)
+          const segments: SubtitleSegment[] = [];
+          let currentGroup: { text: string[]; start: number; duration: number } | null = null;
 
-      if (rawTranscripts && Array.isArray(rawTranscripts) && rawTranscripts.length > 0) {
-        // Group small fragments into coherent subtitle segments (around 3 to 6 seconds each)
-        const segments: SubtitleSegment[] = [];
-        let currentGroup: { text: string[]; start: number; duration: number } | null = null;
+          for (const item of rawTranscripts) {
+            const isMs = item.offset > 500 || item.duration > 100;
+            const itemStart = isMs ? item.offset / 1000 : item.offset;
+            const itemDur = isMs ? item.duration / 1000 : item.duration;
 
-        for (const item of rawTranscripts) {
-          // youtube-transcript returns either milliseconds (srv3) or seconds (classic)
-          const isMs = item.offset > 500 || item.duration > 100;
-          const itemStart = isMs ? item.offset / 1000 : item.offset;
-          const itemDur = isMs ? item.duration / 1000 : item.duration;
-
-          if (!currentGroup) {
-            currentGroup = {
-              text: [item.text],
-              start: itemStart,
-              duration: itemDur
-            };
-          } else {
-            const combinedDur = (itemStart + itemDur) - currentGroup.start;
-            if (combinedDur < 4.5 && currentGroup.text.length < 9) {
-              currentGroup.text.push(item.text);
-              currentGroup.duration = combinedDur;
-            } else {
-              const fullText = currentGroup.text.join(' ').replace(/&amp;#39;/g, "'").replace(/&quot;/g, '"');
-              const segStart = currentGroup.start;
-              const segEnd = currentGroup.start + currentGroup.duration;
-              segments.push({
-                id: uuidv4(),
-                start: parseFloat(segStart.toFixed(2)),
-                end: parseFloat(segEnd.toFixed(2)),
-                text: fullText,
-                words: this.generateWordTimestamps(fullText, segStart, segEnd)
-              });
-
+            if (!currentGroup) {
               currentGroup = {
                 text: [item.text],
                 start: itemStart,
                 duration: itemDur
               };
+            } else {
+              const combinedDur = (itemStart + itemDur) - currentGroup.start;
+              if (combinedDur < 4.5 && currentGroup.text.length < 9) {
+                currentGroup.text.push(item.text);
+                currentGroup.duration = combinedDur;
+              } else {
+                const fullText = currentGroup.text.join(' ').replace(/&amp;#39;/g, "'").replace(/&quot;/g, '"');
+                const segStart = currentGroup.start;
+                const segEnd = currentGroup.start + currentGroup.duration;
+                segments.push({
+                  id: uuidv4(),
+                  start: parseFloat(segStart.toFixed(2)),
+                  end: parseFloat(segEnd.toFixed(2)),
+                  text: fullText,
+                  words: this.generateWordTimestamps(fullText, segStart, segEnd)
+                });
+
+                currentGroup = {
+                  text: [item.text],
+                  start: itemStart,
+                  duration: itemDur
+                };
+              }
             }
           }
-        }
 
-        if (currentGroup) {
-          const fullText = currentGroup.text.join(' ').replace(/&amp;#39;/g, "'").replace(/&quot;/g, '"');
-          const segStart = currentGroup.start;
-          const segEnd = currentGroup.start + currentGroup.duration;
-          segments.push({
-            id: uuidv4(),
-            start: parseFloat(segStart.toFixed(2)),
-            end: parseFloat(segEnd.toFixed(2)),
-            text: fullText,
-            words: this.generateWordTimestamps(fullText, segStart, segEnd)
-          });
-        }
+          if (currentGroup) {
+            const fullText = currentGroup.text.join(' ').replace(/&amp;#39;/g, "'").replace(/&quot;/g, '"');
+            const segStart = currentGroup.start;
+            const segEnd = currentGroup.start + currentGroup.duration;
+            segments.push({
+              id: uuidv4(),
+              start: parseFloat(segStart.toFixed(2)),
+              end: parseFloat(segEnd.toFixed(2)),
+              text: fullText,
+              words: this.generateWordTimestamps(fullText, segStart, segEnd)
+            });
+          }
 
-        if (segments.length >= 3) {
-          return segments;
+          if (segments.length >= 3) {
+            console.log(`[TranscriptService] ¡Subtítulos oficiales de YouTube obtenidos exitosamente! (${segments.length} segmentos)`);
+            return segments;
+          }
         }
+      } catch (err) {
+        console.warn(`[TranscriptService] Subtítulos oficiales no disponibles para ${videoId}`);
       }
-    } catch (err) {
-      console.warn(`Could not fetch official transcript for ${videoId}:`, err);
     }
 
-    // 3. Fallback inteligente: Generar transcripción completa y estructurada alineada a la duración real del video
+    // 3. Si YouTube no tiene subtítulos o es video local, transcribir el audio real con Whisper / Gemini Audio
+    const candidateVideoPath = (localVideoPath && fs.existsSync(localVideoPath))
+      ? localVideoPath
+      : path.join(process.cwd(), 'uploads', `${videoId}.mp4`);
+
+    if (candidateVideoPath && fs.existsSync(candidateVideoPath)) {
+      try {
+        console.log(`[TranscriptService] Transcribiendo audio real del video con Whisper IA: ${candidateVideoPath}`);
+        const audioPath = await whisperService.extractAudio(candidateVideoPath);
+        const whisperSegments = await whisperService.transcribeAudio(audioPath, duration);
+        if (whisperSegments && whisperSegments.length >= 1) {
+          console.log(`[TranscriptService] ¡Transcripción de audio real completada exitosamente! (${whisperSegments.length} segmentos)`);
+          return whisperSegments;
+        }
+      } catch (wErr) {
+        console.warn('[TranscriptService] Error en Whisper/Gemini audio:', wErr);
+      }
+    }
+
+    // 4. Fallback: Generar transcripción sintética alineada a la duración real del video
+    console.warn('[TranscriptService] Usando generador inteligente de estructura sintética para duración:', duration);
     return this.generateSyntheticTranscript(duration);
   }
 
@@ -191,7 +222,7 @@ export class TranscriptService {
 
     const segments: SubtitleSegment[] = [];
     let currentTime = 1.5;
-    const maxTime = Math.min(Math.max(duration, 120), 400);
+    const maxTime = Math.max(duration || 180, 180);
 
     let templateIndex = 0;
     while (currentTime < maxTime) {

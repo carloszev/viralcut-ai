@@ -38,6 +38,37 @@ export const api = {
     );
   },
 
+  async uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<{ success: boolean; videoInfo?: VideoInfo; message?: string }> {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('video', file);
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          onProgress(percent);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch {
+          resolve({ success: false, message: 'Error procesando respuesta del servidor al subir video' });
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        resolve({ success: false, message: 'Error de red durante la carga del video' });
+      });
+
+      xhr.open('POST', `${API_BASE}/videos/upload`);
+      xhr.send(formData);
+    });
+  },
+
   // Projects
   async createProject(params: { url?: string; videoInfo?: VideoInfo }): Promise<{ success: boolean; project?: Project; message?: string }> {
     return safeFetch<{ success: boolean; project?: Project; message?: string }>(
@@ -92,13 +123,22 @@ export const api = {
     );
   },
 
-  async exportClip(projectId: string, clipId: string): Promise<{ success: boolean; exportedUrl?: string; clip?: Clip; savedFolder?: string; message?: string }> {
+  async exportClip(
+    projectId: string,
+    clipId: string,
+    updatedClip?: Clip,
+    forceReRender?: boolean
+  ): Promise<{ success: boolean; exportedUrl?: string; clip?: Clip; savedFolder?: string; message?: string }> {
     return safeFetch<{ success: boolean; exportedUrl?: string; clip?: Clip; savedFolder?: string; message?: string }>(
       `${API_BASE}/clips/${clipId}/export`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({
+          projectId,
+          clip: updatedClip,
+          forceReRender: forceReRender ?? false
+        }),
       },
       'Error durante la exportación del clip'
     );
@@ -115,6 +155,32 @@ export const api = {
       `${API_BASE}/clips/open-folder`,
       { method: 'POST' },
       'No se pudo abrir la carpeta en Windows'
+    );
+  },
+
+  // Batch Export & Zip Download
+  async exportAllClips(projectId: string): Promise<{ success: boolean; message?: string }> {
+    return safeFetch<{ success: boolean; message?: string }>(
+      `${API_BASE}/projects/${projectId}/export-all`,
+      { method: 'POST' },
+      'Error al exportar todos los clips'
+    );
+  },
+
+  getProjectZipDownloadUrl(projectId: string): string {
+    return `${API_BASE}/projects/${projectId}/download-zip`;
+  },
+
+  // Translation
+  async translateClip(clipId: string, language: string, projectId?: string): Promise<{ success: boolean; subtitles?: any[]; language?: string; targetLanguage?: string; clip?: Clip; message?: string }> {
+    return safeFetch<{ success: boolean; subtitles?: any[]; language?: string; targetLanguage?: string; clip?: Clip; message?: string }>(
+      `${API_BASE}/clips/${clipId}/translate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, language }),
+      },
+      'Error traduciendo subtítulos'
     );
   },
 

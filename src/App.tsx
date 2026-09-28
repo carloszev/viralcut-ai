@@ -12,6 +12,7 @@ import { ToastContainer, ToastMessage } from './components/Toast.js';
 import { api } from './services/api.js';
 import { AppSettings, Clip, PipelineStage, Project, VideoInfo } from './types/index.js';
 import { FolderCheck, FolderOpen, X, LayoutDashboard, FolderKanban, Film, Settings } from 'lucide-react';
+import { triggerBrowserFileDownload } from './utils/downloadHelper.js';
 
 export const App: React.FC = () => {
   // Navigation & Views
@@ -22,6 +23,7 @@ export const App: React.FC = () => {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [pipelineStage, setPipelineStage] = useState<PipelineStage | null>(null);
   const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [stageDetail, setStageDetail] = useState<string>('');
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
 
@@ -101,7 +103,10 @@ export const App: React.FC = () => {
         setActiveProject((current) => {
           if (current) {
             const stillExists = loadedProjects.find((p: Project) => p.id === current.id);
-            if (stillExists) return stillExists;
+            if (stillExists) {
+              setVideoInfo(stillExists.videoInfo);
+              return stillExists;
+            }
           }
           const completedProject = loadedProjects.find(
             (p: Project) => p.status === 'completed' && p.clips && p.clips.length > 0
@@ -121,6 +126,30 @@ export const App: React.FC = () => {
     }
   };
 
+  // Sync project when background YouTube download completes and associates local MP4
+  useEffect(() => {
+    if (!activeProject || activeProject.status !== 'completed') return;
+    const vInfo = activeProject.videoInfo;
+    const isYt = Boolean(vInfo && (vInfo.url?.includes('youtube') || (/^[a-zA-Z0-9_-]{11}$/.test(vInfo.videoId))));
+    const hasLocal = Boolean(vInfo && vInfo.videoSourceUrl && vInfo.videoSourceUrl.startsWith('/uploads/'));
+    
+    if (isYt && !hasLocal) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await api.getProject(activeProject.id);
+          if (res.success && res.project?.videoInfo?.videoSourceUrl?.startsWith('/uploads/')) {
+            console.log('[App] Video local descargado y disponible en segundo plano. Actualizando proyecto:', res.project.videoInfo.videoSourceUrl);
+            setActiveProject(res.project);
+            setVideoInfo(res.project.videoInfo);
+            setProjects((prev) => prev.map((p) => (p.id === res.project!.id ? res.project! : p)));
+            clearInterval(interval);
+          }
+        } catch (_) {}
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [activeProject?.id, activeProject?.videoInfo?.videoSourceUrl]);
+
   const handleToggleTheme = () => {
     const nextTheme: 'dark' | 'light' = settings.theme === 'dark' ? 'light' : 'dark';
     const updated: AppSettings = { ...settings, theme: nextTheme };
@@ -133,6 +162,7 @@ export const App: React.FC = () => {
     setVideoInfo(info);
     setActiveProject(null);
     setPipelineStage(null);
+    setStageDetail('');
     setPipelineError(null);
     if (autoStart) {
       handleStartAnalysis(info);
@@ -147,6 +177,7 @@ export const App: React.FC = () => {
     setPipelineError(null);
     setPipelineStage('fetching_info');
     setProgressPercent(12);
+    setStageDetail('Iniciando pipeline de análisis inteligente...');
 
     try {
       const res = await api.createProject({ videoInfo: targetVideo, url: targetVideo.url });
@@ -168,20 +199,22 @@ export const App: React.FC = () => {
           if (pollRes.success && pollRes.project) {
             const p = pollRes.project;
             if (p.currentStage) setPipelineStage(p.currentStage);
+            if (p.stageDetail) setStageDetail(p.stageDetail);
             if (p.progressPercent !== undefined) setProgressPercent(p.progressPercent);
 
-            if (p.status === 'completed' && p.clips && p.clips.length > 0) {
+            if (p.status === 'completed') {
               isDone = true;
               setProgressPercent(100);
               setPipelineStage('completed');
-              // Smooth transition to show completed status before rendering clips
+              if (p.stageDetail) setStageDetail(p.stageDetail);
+              // Quick and smooth transition to render clips showcase
               setTimeout(() => {
                 setActiveProject(p);
                 setPipelineStage(null);
                 setPipelineError(null);
                 setIsStartingAnalysis(false);
                 loadProjects();
-              }, 1500);
+              }, 400);
               return;
             }
 
@@ -197,12 +230,12 @@ export const App: React.FC = () => {
         }
 
         if (!isDone) {
-          setTimeout(pollProgress, 500);
+          setTimeout(pollProgress, 400);
         }
       };
 
       // Start continuous progress polling
-      setTimeout(pollProgress, 400);
+      setTimeout(pollProgress, 350);
 
     } catch (e: any) {
       setPipelineError('No pudimos acceder a este video.');
@@ -215,6 +248,7 @@ export const App: React.FC = () => {
     setVideoInfo(null);
     setActiveProject(null);
     setPipelineStage(null);
+    setStageDetail('');
     setPipelineError(null);
     setCurrentTab('dashboard');
   };
@@ -284,7 +318,7 @@ export const App: React.FC = () => {
     if (!targetProjectId) return;
     setExportingClipId(clip.id);
     try {
-      const res = await api.exportClip(targetProjectId, clip.id);
+      const res = await api.exportClip(targetProjectId, clip.id, clip);
       if (res.success && res.exportedUrl) {
         // Update clip in local project state
         if (activeProject && activeProject.id === targetProjectId) {
@@ -305,17 +339,7 @@ export const App: React.FC = () => {
         const fileName = `ViralCut_Clip_${clip.clipNumber || 1}_${cleanTitle}.mp4`;
         const downloadUrl = api.getClipDownloadUrl(res.exportedUrl, fileName);
 
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', fileName);
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) {
-            document.body.removeChild(link);
-          }
-        }, 1500);
+        await triggerBrowserFileDownload(downloadUrl, fileName);
 
         // Feedback visual y toast notification
         setExportNotice({
@@ -325,8 +349,12 @@ export const App: React.FC = () => {
 
         addToast({
           type: 'success',
-          title: '¡Clip 9:16 exportado!',
-          description: `Guardado en Videos y descargado: ${fileName}`,
+          title: '¡Clip 9:16 exportado y descargado!',
+          description: `Guardado en Documentos\\Videos: ${fileName}`,
+          action: {
+            label: 'Volver a descargar',
+            onClick: () => triggerBrowserFileDownload(downloadUrl, fileName),
+          },
         });
 
         return res.exportedUrl;
@@ -392,6 +420,7 @@ export const App: React.FC = () => {
                   <PipelineProgress
                     currentStage={pipelineStage || 'fetching_info'}
                     progressPercent={progressPercent}
+                    stageDetail={stageDetail}
                     videoTitle={videoInfo?.title}
                     thumbnailUrl={videoInfo?.thumbnailUrl}
                     errorMessage={pipelineError || undefined}
@@ -410,7 +439,12 @@ export const App: React.FC = () => {
                     onDeleteProject={handleDeleteProject}
                     onEditClip={(clip) => setEditingClip(clip)}
                     onExportClip={handleExportClip}
+                    onUpdateClip={handleSaveClipChanges}
                     exportingClipId={exportingClipId}
+                    onProjectUpdated={(updatedP) => {
+                      setActiveProject(updatedP);
+                      setProjects((prev) => prev.map((p) => (p.id === updatedP.id ? updatedP : p)));
+                    }}
                   />
                 )}
               </>
@@ -436,7 +470,12 @@ export const App: React.FC = () => {
                     onDeleteProject={handleDeleteProject}
                     onEditClip={(clip) => setEditingClip(clip)}
                     onExportClip={handleExportClip}
+                    onUpdateClip={handleSaveClipChanges}
                     exportingClipId={exportingClipId}
+                    onProjectUpdated={(updatedP) => {
+                      setActiveProject(updatedP);
+                      setProjects((prev) => prev.map((p) => (p.id === updatedP.id ? updatedP : p)));
+                    }}
                   />
                 ) : (
                   <div className="text-center py-20 glass-panel rounded-3xl border border-white/5 space-y-4">

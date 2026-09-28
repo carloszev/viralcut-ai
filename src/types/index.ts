@@ -1,6 +1,6 @@
 export type AspectRatio = '9:16' | '1:1' | '16:9';
 
-export type SubtitleStylePreset = 'hormozi' | 'clean' | 'cinema' | 'cyber';
+export type SubtitleStylePreset = 'hormozi' | 'clean' | 'cinema' | 'cyber' | 'devinci';
 
 export interface SubtitleWord {
   word: string;
@@ -29,14 +29,21 @@ export interface SubtitleConfig {
   uppercase: boolean;
   maxWordsPerLine: number;
   animation: 'pop' | 'glow' | 'fade' | 'none';
+  fontFamily?: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  autoEmojis?: boolean;
 }
 
 export interface SmartReframeConfig {
-  mode: 'auto' | 'center' | 'manual';
+  mode: 'auto' | 'center' | 'manual' | 'split_screen' | 'speaker_switch';
   horizontalOffsetPercent: number; // -50 to 50
+  speaker1OffsetPercent?: number;
+  speaker2OffsetPercent?: number;
   scaleFactor: number; // 1.0 to 2.0
   activeSpeakerTracking: boolean;
   smoothingFactor: number;
+  faceTrackingData?: Array<{ time: number; xPercent: number; yPercent: number; confidence: number }>;
 }
 
 export interface ClipMetadata {
@@ -54,6 +61,12 @@ export interface ClipMetadata {
     curiosityLoop: number;   // max 15
   };
   scoreRationale: string;
+  socialPack?: {
+    viralTitles: string[];
+    seoDescription: string;
+    hashtags: string[];
+    pinnedComment: string;
+  };
 }
 
 export interface Clip {
@@ -68,6 +81,14 @@ export interface Clip {
   subtitles: SubtitleSegment[];
   subtitleConfig: SubtitleConfig;
   reframeConfig: SmartReframeConfig;
+  smartJumpCut?: boolean;
+  silenceDurationRemoved?: number;
+  punchInZoom?: boolean;
+  audioEnhance?: boolean;
+  hookBooster?: boolean;
+  hookBoosterType?: 'zoom_snap' | 'cinematic_push';
+  pixelEnhance?: boolean;
+  resolution?: '4k' | '1080p' | '720p';
   exportedUrl?: string;
   exportStatus?: 'idle' | 'rendering' | 'completed' | 'error';
   exportProgress?: number;
@@ -87,6 +108,7 @@ export interface VideoInfo {
   description?: string;
   localVideoPath?: string;
   videoSourceUrl?: string;
+  isLocalFile?: boolean;
 }
 
 export type PipelineStage = 
@@ -117,6 +139,7 @@ export interface Project {
   updatedAt: string;
   status: 'analyzing' | 'processing' | 'completed' | 'error';
   currentStage?: PipelineStage;
+  stageDetail?: string;
   progressPercent: number;
   errorMessage?: string;
   transcript: SubtitleSegment[];
@@ -127,9 +150,10 @@ export interface AppSettings {
   theme: 'dark' | 'light';
   geminiApiKey?: string;
   openaiApiKey?: string;
+  groqApiKey?: string;
   defaultAspectRatio: AspectRatio;
-  defaultSubtitleStyle: SubtitleStylePreset;
-  exportQuality: '1080p' | '720p';
+  defaultSubtitleStyle?: SubtitleStylePreset;
+  exportQuality: '4k' | '1080p' | '720p';
   exportFps: 30 | 60;
   autoReframeEnabled: boolean;
 }

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Clip, Project, VideoInfo } from '../types/index.js';
 import { ClipCard } from './ClipCard.js';
-import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal, Download, Loader2, Trash2 } from 'lucide-react';
+import { Filter, ArrowUpDown, Sparkles, SlidersHorizontal, Download, Loader2, Trash2, Archive } from 'lucide-react';
+import { api } from '../services/api.js';
 
 interface ClipsShowcaseProps {
   clips: Clip[];
@@ -11,7 +12,9 @@ interface ClipsShowcaseProps {
   onDeleteProject?: (projectId: string) => void;
   onEditClip: (clip: Clip) => void;
   onExportClip: (clip: Clip) => void;
+  onUpdateClip?: (clip: Clip) => void;
   exportingClipId?: string | null;
+  onProjectUpdated?: (project: Project) => void;
 }
 
 type SortOption = 'potential' | 'duration' | 'newest' | 'original';
@@ -25,12 +28,16 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
   onDeleteProject,
   onEditClip,
   onExportClip,
+  onUpdateClip,
   exportingClipId,
+  onProjectUpdated,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Todas');
   const [sortBy, setSortBy] = useState<SortOption>('potential');
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isZipping, setIsZipping] = useState(false);
+  const [zipStatusText, setZipStatusText] = useState<string | null>(null);
 
   const categories: CategoryFilter[] = [
     'Todas',
@@ -87,6 +94,53 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
     setBatchProgress(null);
   };
 
+  const handleDownloadZip = async () => {
+    const targetProjId = activeProjectId || clips[0]?.projectId;
+    if (!targetProjId || isZipping) return;
+    setIsZipping(true);
+    setZipStatusText('Preparando clips...');
+    try {
+      // First ensure clips are queued/rendered if not already done
+      const unexported = clips.filter((c) => c.exportStatus !== 'completed');
+      if (unexported.length > 0) {
+        setZipStatusText(`Renderizando ${unexported.length} clips...`);
+        await api.exportAllClips(targetProjId);
+
+        // Poll project state until clips are ready or max attempts reached
+        let attempts = 0;
+        while (attempts < 25) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const pRes = await api.getProject(targetProjId);
+          if (pRes.success && pRes.project) {
+            const completed = (pRes.project.clips || []).filter((c) => c.exportStatus === 'completed');
+            if (completed.length > 0) {
+              setZipStatusText(`Renderizados ${completed.length}/${pRes.project.clips.length}...`);
+              if (onProjectUpdated) onProjectUpdated(pRes.project);
+              if (completed.length >= pRes.project.clips.length) break;
+            }
+          }
+          attempts++;
+        }
+      }
+
+      setZipStatusText('Generando ZIP...');
+      const zipUrl = api.getProjectZipDownloadUrl(targetProjId);
+      const link = document.createElement('a');
+      link.href = zipUrl;
+      link.setAttribute('download', `ViralCut_Pack_${clips.length}_Clips.zip`);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (document.body.contains(link)) document.body.removeChild(link);
+      }, 1500);
+    } catch (e) {
+      console.error('Error downloading zip:', e);
+    } finally {
+      setIsZipping(false);
+      setZipStatusText(null);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fade-in-up">
       {/* Header with count and Title */}
@@ -104,7 +158,7 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
           </p>
         </div>
 
-        {/* Actions bar: Export All + Sort selector */}
+        {/* Actions bar: Export All + Download ZIP + Sort selector */}
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleExportAll}
@@ -121,6 +175,25 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
               <>
                 <Download className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Exportar Todos ({filteredClips.length})</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleDownloadZip}
+            disabled={isZipping || isBatchExporting}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-200 border border-white/10 hover:border-cyber-cyan/40 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 disabled:opacity-60 shadow-sm"
+            title="Descargar todos los clips en un solo archivo comprimido .ZIP"
+          >
+            {isZipping ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-cyber-cyan" />
+                <span>{zipStatusText || 'Preparando .ZIP...'}</span>
+              </>
+            ) : (
+              <>
+                <Archive className="w-3.5 h-3.5 text-cyber-cyan" />
+                <span>Descargar .ZIP</span>
               </>
             )}
           </button>
@@ -205,6 +278,7 @@ export const ClipsShowcase: React.FC<ClipsShowcaseProps> = ({
                 videoInfo={clipVideoInfo}
                 onEdit={onEditClip}
                 onExport={onExportClip}
+                onUpdateClip={onUpdateClip}
                 isExporting={exportingClipId === clip.id}
               />
             );

@@ -1,5 +1,6 @@
 import { ClipMetadata, SubtitleSegment } from '../types/server.js';
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '../db/database.js';
 
 export interface DetectedSegmentCandidate {
   startTime: number;
@@ -15,87 +16,291 @@ export class RetentionAnalyzer {
     'cómo', 'por qué', 'el secreto', 'lo que nadie te dice', 'el mayor error',
     'nunca hagas esto', 'esto cambia todo', 'la verdad sobre', 'mira esto',
     'te garantizo que', 'el 90%', 'imagina que', 'la pregunta clave', 'increíble',
-    'atención', 'descubre', 'la clave', 'la regla', 'el truco'
+    'atención', 'descubre', 'la clave', 'la regla', 'el truco', 'debes saber',
+    'lo peor es que', 'la gente no entiende', 'el problema real'
   ];
 
   private emotionalTriggers = [
     'increíble', 'brutal', 'locura', 'imposible', 'secreto', 'magia', 'impacto',
     'sorprendente', 'revolución', 'fracaso', 'éxito', 'dinero', 'futuro', 'peligro',
-    'transformar', 'mente', 'disciplina'
+    'transformar', 'mente', 'disciplina', 'sueño', 'miedo', 'obsesión', 'hambre',
+    'derrota', 'dolor', 'orgullo', 'victoria', 'sacrificio'
   ];
 
   private debateTriggers = [
     'no estoy de acuerdo', 'la verdad es que', 'mentira', 'mito', 'error',
-    'la mayoría piensa que', 'sin embargo', 'el problema real', 'desacuerdo'
+    'la mayoría piensa que', 'sin embargo', 'el problema real', 'desacuerdo',
+    'es mentira', 'equivocados', 'polémica', 'no funciona', 'una trampa'
   ];
 
   /**
-   * Detecta y extrae los mejores segmentos de video con alta probabilidad de retención
+   * Analiza la transcripción completa a lo largo de TODO el video y extrae los mejores
+   * 5 a 7 momentos virales con puntos de corte limpios y pensados por IA
    */
-  public analyzeTranscriptAndExtractSegments(
+  public async analyzeTranscriptAndExtractSegments(
     transcript: SubtitleSegment[],
     totalDuration: number
-  ): DetectedSegmentCandidate[] {
+  ): Promise<DetectedSegmentCandidate[]> {
     const safeDuration = Math.max(totalDuration || 0, 180);
 
-    // If transcript is empty or too short, generate a rich transcript first
-    if (!transcript || transcript.length < 4) {
+    if (!transcript || transcript.length < 3) {
       return this.generateFallbackSegments(safeDuration);
     }
 
-    const candidates: DetectedSegmentCandidate[] = [];
-    const minClipDuration = 28; // seconds
-    const targetClipDuration = 42; // optimal sweet spot for Shorts/Reels/TikTok
-    const maxClipDuration = 55; // seconds
+    // 1. Intentar análisis inteligente con IA Gemini si hay API key configurada
+    try {
+      const settings = db.getSettings();
+      const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
 
-    // Multi-pass sliding window over dialogue segments
-    let i = 0;
-    while (i < transcript.length && candidates.length < 7) {
-      const startSeg = transcript[i];
-      const startTime = startSeg.start;
-
-      let j = i;
-      let aggregatedText: string[] = [];
-      let currentSubtitles: SubtitleSegment[] = [];
-
-      while (j < transcript.length) {
-        const seg = transcript[j];
-        const currentDuration = seg.end - startTime;
-
-        aggregatedText.push(seg.text);
-        currentSubtitles.push(seg);
-
-        if (currentDuration >= minClipDuration) {
-          if (currentDuration >= targetClipDuration || j === transcript.length - 1 || currentDuration >= maxClipDuration) {
-            const fullText = aggregatedText.join(' ');
-            const duration = parseFloat((seg.end - startTime).toFixed(2));
-            const metadata = this.calculatePotentialScore(fullText, currentSubtitles, duration);
-
-            candidates.push({
-              startTime: parseFloat(startTime.toFixed(2)),
-              endTime: parseFloat(seg.end.toFixed(2)),
-              duration,
-              transcriptText: fullText,
-              subtitles: currentSubtitles,
-              metadata
-            });
-
-            // Advance index
-            i = j + 1;
-            break;
-          }
+      if (apiKey && apiKey.trim().length > 10 && !apiKey.includes('test_placeholder')) {
+        console.log(`[RetentionAnalyzer] Iniciando análisis profundo con Gemini IA para video de ${safeDuration}s...`);
+        const geminiMoments = await this.extractWithGemini(transcript, safeDuration, apiKey.trim());
+        if (geminiMoments && geminiMoments.length >= 3) {
+          console.log(`[RetentionAnalyzer] Gemini IA detectó ${geminiMoments.length} momentos virales estratégicos.`);
+          return geminiMoments;
         }
-        j++;
+      }
+    } catch (e: any) {
+      console.warn('[RetentionAnalyzer] Error consultando Gemini IA (usando motor algorítmico avanzado):', e.message);
+    }
+
+    // 2. Motor Algorítmico Multizona Avanzado (cobertura a lo largo de TODO el video y cortes en frases limpias)
+    console.log(`[RetentionAnalyzer] Ejecutando análisis heurístico multizona a lo largo de los ${safeDuration}s del video...`);
+    return this.extractAlgorithmicViralMoments(transcript, safeDuration);
+  }
+
+  /**
+   * Análisis contextual profundo con Gemini para encontrar los picos de retención
+   */
+  private async extractWithGemini(
+    transcript: SubtitleSegment[],
+    totalDuration: number,
+    apiKey: string
+  ): Promise<DetectedSegmentCandidate[] | null> {
+
+    try {
+      // Muestrear transcripción para no exceder tokens en videos largos (1-2 horas)
+      const formattedLines = transcript.map((s) => {
+        const m = Math.floor(s.start / 60).toString().padStart(2, '0');
+        const sec = Math.floor(s.start % 60).toString().padStart(2, '0');
+        return `[${m}:${sec}] ${s.text}`;
+      });
+
+      const maxChars = 20000;
+      let textPayload = formattedLines.join('\n');
+      if (textPayload.length > maxChars) {
+        // En videos muy largos, extraer muestras distribuidas
+        const step = Math.ceil(textPayload.length / maxChars);
+        textPayload = formattedLines.filter((_, idx) => idx % step === 0).join('\n');
       }
 
-      if (j >= transcript.length) {
-        break;
+      const prompt = `Actúa como un director y estratega de contenido viral de élite (estilo Alex Hormozi, MrBeast, Iman Gadzhi).
+Tienes la transcripción de un video con duración de ${Math.round(totalDuration)} segundos.
+Tu misión es PENSAR BIEN DÓNDE HACER LOS RECORTES para seleccionar entre 5 y 7 de los momentos MÁS VIRALES, IMPORTANTES e IMPACTANTES de TODO el video.
+
+REQUISITOS CRÍTICOS:
+1. DISTRIBUCIÓN TOTAL: Los cortes NO deben ser todos del inicio. Repártelos a lo largo de TODO el video (gancho inicial, revelaciones centrales, debates picantes, anécdotas clave y remates/conclusiones).
+2. CORTES LIMPIOS Y EXACTOS:
+   - "startTime": Debe iniciar exactamente donde comienza una frase, pregunta o gancho fuerte.
+   - "endTime": Debe terminar exactamente donde se concluye una idea, remate o moraleja (punto final).
+   - Duración de cada clip: Entre 28 y 52 segundos.
+   - NUNCA cortes una palabra a la mitad ni dejes una idea cortada en el aire.
+3. POTENCIAL VIRAL:
+   - "title": Título llamativo y específico basado en lo que realmente se dice.
+   - "hook": Frase de impacto de los primeros 3 segundos.
+   - "category": 'Humor' | 'Información' | 'Emoción' | 'Debate' | 'Sorpresa' | 'Historia' | 'Educación'.
+   - "potentialScore": Número entre 78 y 98.
+   - "rationale": Breve explicación de por qué este momento retendrá a la audiencia.
+
+Responde ÚNICAMENTE con un array JSON sin texto adicional ni markdown:
+[
+  {
+    "startTime": 15.2,
+    "endTime": 52.8,
+    "title": "...",
+    "hook": "...",
+    "category": "...",
+    "potentialScore": 92,
+    "rationale": "..."
+  }
+]`;
+
+      const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
+      let parsedMoments: any[] | null = null;
+
+      for (const model of candidateModels) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `${prompt}\n\nTRANSCRIPCIÓN:\n${textPayload}` }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.3,
+                maxOutputTokens: 4096
+              }
+            }),
+            signal: controller.signal
+          });
+
+          if (res.ok) {
+            const data = (await res.json()) as any;
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              parsedMoments = parsed;
+              console.log(`[RetentionAnalyzer] Éxito con Gemini (${model}): ${parsed.length} momentos generados.`);
+              break;
+            }
+          } else {
+            console.warn(`[RetentionAnalyzer] Gemini (${model}) respondió con status ${res.status}, probando alternativa...`);
+          }
+        } catch (e: any) {
+          console.warn(`[RetentionAnalyzer] Error consultando Gemini (${model}):`, e.message);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      if (!parsedMoments || parsedMoments.length === 0) {
+        return null;
+      }
+
+      const results: DetectedSegmentCandidate[] = [];
+
+      for (const m of parsedMoments) {
+        const rawStart = Number(m.startTime) || 0;
+        const rawEnd = Number(m.endTime) || rawStart + 40;
+        const dur = Math.max(25, Math.min(58, rawEnd - rawStart));
+
+        // Ajustar a las fronteras exactas de subtítulos para evitar cortes bruscos
+        const matchingSubs = transcript.filter((s) => s.end >= rawStart && s.start <= rawStart + dur);
+        if (matchingSubs.length === 0) continue;
+
+        const cleanStart = parseFloat(matchingSubs[0].start.toFixed(2));
+        const cleanEnd = parseFloat(matchingSubs[matchingSubs.length - 1].end.toFixed(2));
+        const cleanDur = parseFloat((cleanEnd - cleanStart).toFixed(2));
+
+        if (cleanDur < 20) continue;
+
+        const fullText = matchingSubs.map((s) => s.text).join(' ');
+        const meta = this.calculatePotentialScore(fullText, matchingSubs, cleanDur);
+        meta.title = m.title || meta.title;
+        meta.hook = m.hook || meta.hook;
+        meta.category = m.category || meta.category;
+        meta.potentialScore = Math.min(98, Math.max(75, Number(m.potentialScore) || meta.potentialScore));
+        if (m.rationale) meta.scoreRationale = m.rationale;
+
+        results.push({
+          startTime: cleanStart,
+          endTime: cleanEnd,
+          duration: cleanDur,
+          transcriptText: fullText,
+          subtitles: matchingSubs,
+          metadata: meta
+        });
+      }
+
+      return results.length >= 3 ? results.sort((a, b) => b.metadata.potentialScore - a.metadata.potentialScore) : null;
+    } catch (err: any) {
+      console.warn('[RetentionAnalyzer] No se pudo parsear respuesta de Gemini:', err.message);
+      return null;
+
+    }
+  }
+
+  /**
+   * Motor Algorítmico Multizona: divide el video en 6 zonas temporales a lo largo de TODO
+   * el metraje y selecciona el clímax con corte exacto en oraciones completas
+   */
+  public extractAlgorithmicViralMoments(
+    transcript: SubtitleSegment[],
+    totalDuration: number
+  ): DetectedSegmentCandidate[] {
+    const targetCount = 6;
+    const candidates: DetectedSegmentCandidate[] = [];
+    const videoDuration = Math.max(totalDuration, transcript[transcript.length - 1].end);
+
+    // Dividir la duración total en 6 zonas temporales distribuidas
+    const zoneDuration = videoDuration / targetCount;
+
+    for (let zoneIdx = 0; zoneIdx < targetCount; zoneIdx++) {
+      const zoneStart = zoneIdx * zoneDuration;
+      const zoneEnd = Math.min(videoDuration, (zoneIdx + 1) * zoneDuration);
+
+      // Obtener subtítulos en la ventana de la zona (con margen de solapamiento para oraciones completas)
+      const zoneSubs = transcript.filter(
+        (s) => s.end >= Math.max(0, zoneStart - 10) && s.start <= zoneEnd + 15
+      );
+
+      if (zoneSubs.length < 3) {
+        continue;
+      }
+
+      // Buscar el mejor segmento continuo de 30s a 50s dentro de esta zona con inicio y fin en oraciones completas
+      let bestCandidate: DetectedSegmentCandidate | null = null;
+      let highestScore = -1;
+
+      for (let i = 0; i < zoneSubs.length; i++) {
+        const startSeg = zoneSubs[i];
+        
+        // Preferir iniciar en frases limpias (primera letra mayúscula o signo de interrogación)
+        const isCleanStart = /^[A-Z¿¡"']/.test(startSeg.text.trim());
+
+        let aggregatedSubs: SubtitleSegment[] = [];
+        for (let j = i; j < zoneSubs.length; j++) {
+          const seg = zoneSubs[j];
+          aggregatedSubs.push(seg);
+          const currentDuration = seg.end - startSeg.start;
+
+          // Ventana óptima para Shorts/Reels/TikTok: 30 a 50 segundos
+          if (currentDuration >= 28 && currentDuration <= 52) {
+            const lastText = seg.text.trim();
+            // Verificar si termina en signo de puntuación natural (., ?, !)
+            const isCleanEnd = /[.?!]$/.test(lastText) || j === zoneSubs.length - 1;
+
+            const fullText = aggregatedSubs.map((s) => s.text).join(' ');
+            const meta = this.calculatePotentialScore(fullText, aggregatedSubs, currentDuration);
+
+            // Bonificación por cortes limpios en inicio y fin de frase
+            let windowScore = meta.potentialScore;
+            if (isCleanStart) windowScore += 5;
+            if (isCleanEnd) windowScore += 6;
+
+            if (windowScore > highestScore) {
+              highestScore = windowScore;
+              meta.potentialScore = Math.min(98, Math.max(76, windowScore));
+              bestCandidate = {
+                startTime: parseFloat(startSeg.start.toFixed(2)),
+                endTime: parseFloat(seg.end.toFixed(2)),
+                duration: parseFloat(currentDuration.toFixed(2)),
+                transcriptText: fullText,
+                subtitles: aggregatedSubs,
+                metadata: meta
+              };
+            }
+
+            // Si ya encontramos un corte con punto final limpio en duración ideal, avanzar
+            if (isCleanEnd && currentDuration >= 35) {
+              break;
+            }
+          }
+        }
+      }
+
+      if (bestCandidate) {
+        candidates.push(bestCandidate);
       }
     }
 
-    // Guarantee between 5 and 7 clips by subdividing or synthesizing strategically
+    // Si algunas zonas estaban vacías, completar con fallback estructurado
     if (candidates.length < 5) {
-      return this.fillMissingClips(candidates, transcript, safeDuration);
+      return this.fillMissingClips(candidates, transcript, videoDuration);
     }
 
     return candidates.sort((a, b) => b.metadata.potentialScore - a.metadata.potentialScore);
@@ -120,7 +325,7 @@ export class RetentionAnalyzer {
         hookImpact += 3;
       }
     }
-    if (firstPhrase.includes('?') || firstPhrase.includes('¿')) hookImpact += 3;
+    if (firstPhrase.includes('?') || firstPhrase.includes('¿')) hookImpact += 4;
     hookImpact = Math.min(25, Math.max(12, hookImpact));
 
     // 2. Information & Story Density (0 - 25 pts)
@@ -162,7 +367,7 @@ export class RetentionAnalyzer {
 
     // Detect Category
     let category: ClipMetadata['category'] = 'Información';
-    if (this.debateTriggers.some(d => lowerText.includes(d))) {
+    if (this.debateTriggers.some((d) => lowerText.includes(d))) {
       category = 'Debate';
     } else if (lowerText.includes('jaja') || lowerText.includes('risa') || lowerText.includes('increíble')) {
       category = 'Humor';
@@ -179,20 +384,20 @@ export class RetentionAnalyzer {
     // Generate Hook Teaser
     const hook = firstPhrase.length > 85 ? firstPhrase.slice(0, 82) + '...' : firstPhrase;
 
-    // Dynamic Rationale based on signals
-    const rationales: string[] = [];
-    if (hookImpact >= 19) rationales.push('Hook inicial de alto impacto');
-    if (infoDensity >= 19) rationales.push('alta densidad de información');
-    if (emotionalSpike >= 15) rationales.push('picos emocionales y frases memorables');
-    if (pacingFlow >= 13) rationales.push('ritmo fluido y duración óptima (9:16)');
-    if (curiosityLoop >= 12) rationales.push('final con curiosidad abierta');
-
-    const scoreRationale = rationales.length > 0 
-      ? rationales.join(' + ') + '.'
-      : 'Estructura equilibrada con retención sostenida.';
-
-    // Generate Catchy Title
+    // Generate Contextual Title extracted from dialogue
     const title = this.generateCatchyTitle(firstPhrase, category, text);
+
+    // Build Rationale Breakdown
+    const rationaleParts: string[] = [];
+    if (hookImpact >= 20) rationaleParts.push('gancho de apertura de alta curiosidad');
+    if (infoDensity >= 20) rationaleParts.push('alta densidad de información');
+    if (emotionalSpike >= 16) rationaleParts.push('picos emocionales y frases memorables');
+    if (pacingFlow >= 14) rationaleParts.push('ritmo fluido y duración óptima (9:16)');
+    if (curiosityLoop >= 14) rationaleParts.push('final con curiosidad abierta');
+
+    const scoreRationale = rationaleParts.length > 0 
+      ? rationaleParts.join(' + ') + '.' 
+      : 'Estructura equilibrada con potencial de retención para formato vertical.';
 
     return {
       title,
@@ -213,6 +418,12 @@ export class RetentionAnalyzer {
   }
 
   private generateCatchyTitle(firstPhrase: string, category: string, fullText: string): string {
+    // Si la primera frase es una pregunta, usarla como título directo
+    const questionMatch = fullText.match(/(¿[^?]+\?|\b[Cc]ómo [^.?!]+|\b[Pp]or qué [^.?!]+)/);
+    if (questionMatch && questionMatch[1].length >= 15 && questionMatch[1].length <= 65) {
+      return questionMatch[1].trim();
+    }
+
     const titlesByCategory: Record<string, string[]> = {
       'Información': [
         'Lo que nadie te cuenta sobre esto',
@@ -266,21 +477,18 @@ export class RetentionAnalyzer {
   ): DetectedSegmentCandidate[] {
     const targetCount = 6;
     const results = [...existing];
-
-    // If we have transcript segments, sample windows
-    const clipInterval = Math.max(30, Math.floor(totalDuration / (targetCount + 1)));
+    const clipInterval = Math.max(35, Math.floor(totalDuration / (targetCount + 1)));
 
     for (let idx = results.length; idx < targetCount; idx++) {
       const start = idx * clipInterval;
       const end = start + 38;
 
-      // Find overlapping transcript or generate aligned subs
-      let clipSubs = transcript.filter(s => s.start >= start - 3 && s.end <= end + 3);
+      let clipSubs = transcript.filter((s) => s.start >= start - 3 && s.end <= end + 3);
       if (clipSubs.length === 0) {
         clipSubs = this.generateSubtitlesForRange(start, end);
       }
 
-      const fullText = clipSubs.map(s => s.text).join(' ');
+      const fullText = clipSubs.map((s) => s.text).join(' ');
       const metadata = this.calculatePotentialScore(fullText, clipSubs, 38);
 
       results.push({

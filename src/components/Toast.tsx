@@ -6,6 +6,10 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'info';
   title: string;
   description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 interface ToastProps {
@@ -27,9 +31,9 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
   useEffect(() => {
     const timer = setTimeout(() => {
       onDismiss(toast.id);
-    }, 3800);
+    }, toast.action ? 6000 : 3800);
     return () => clearTimeout(timer);
-  }, [toast.id, onDismiss]);
+  }, [toast.id, toast.action, onDismiss]);
 
   const typeConfig = {
     success: {
@@ -69,6 +73,17 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
           <p className="text-[11px] text-slate-300 mt-0.5 leading-snug line-clamp-2">
             {toast.description}
           </p>
+        )}
+        {toast.action && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.action!.onClick();
+            }}
+            className="mt-2 px-2.5 py-1 rounded-lg bg-cyber-cyan/20 hover:bg-cyber-cyan text-cyber-cyan hover:text-dark-950 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-cyber-cyan/30"
+          >
+            {toast.action.label}
+          </button>
         )}
       </div>
       <button

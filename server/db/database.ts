@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { DB_FILE, SETTINGS_FILE } from '../config.js';
+import { DB_FILE, SETTINGS_FILE, UPLOADS_DIR } from '../config.js';
 import { Project, AppSettings, Clip } from '../types/server.js';
 
 interface DatabaseSchema {
@@ -11,6 +11,7 @@ const defaultSettings: AppSettings = {
   theme: 'dark',
   geminiApiKey: '',
   openaiApiKey: '',
+  groqApiKey: '',
   defaultAspectRatio: '9:16',
   defaultSubtitleStyle: 'hormozi',
   exportQuality: '1080p',
@@ -45,9 +46,11 @@ class Database {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+        const rawProjects = Array.isArray(parsed?.projects) ? parsed.projects : [];
         this.data = {
-          projects: Array.isArray(parsed?.projects) ? parsed.projects : []
+          projects: rawProjects.map((p: any) => this.normalizeProject(p))
         };
+        this.flushSync();
       } else {
         this.save(true);
       }
@@ -115,33 +118,72 @@ class Database {
     }, 250);
   }
 
+  public normalizeProject(project: Project): Project {
+    if (!project) return project;
+    if (project.videoInfo) {
+      const rawId = project.videoInfo.videoId || '';
+      const cleanId = rawId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (cleanId) {
+        const candidateFile = path.join(UPLOADS_DIR, `${cleanId}.mp4`);
+        if (fs.existsSync(candidateFile)) {
+          project.videoInfo.localVideoPath = candidateFile;
+          project.videoInfo.videoSourceUrl = `/uploads/${cleanId}.mp4`;
+        }
+      }
+    }
+    if (Array.isArray(project.clips)) {
+      for (const clip of project.clips) {
+        if (!clip.subtitleConfig) {
+          clip.subtitleConfig = {
+            enabled: true,
+            style: 'hormozi',
+            fontSize: 28,
+            textColor: '#FFFFFF',
+            highlightColor: '#00F0FF',
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            position: 'bottom',
+            yOffsetPercent: 78,
+            uppercase: true,
+            maxWordsPerLine: 4,
+            animation: 'pop',
+          };
+        } else {
+          clip.subtitleConfig.enabled = true;
+        }
+      }
+    }
+    return project;
+  }
+
   // Projects CRUD
   public getAllProjects(): Project[] {
     const list = Array.isArray(this.data.projects) ? this.data.projects : [];
-    return list.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return list
+      .map((p) => this.normalizeProject(p))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   public getProjectById(id: string): Project | undefined {
     if (!Array.isArray(this.data.projects)) return undefined;
-    return this.data.projects.find((p) => p.id === id);
+    const found = this.data.projects.find((p) => p.id === id);
+    return found ? this.normalizeProject(found) : undefined;
   }
 
   public saveProject(project: Project): Project {
     if (!Array.isArray(this.data.projects)) {
       this.data.projects = [];
     }
-    const idx = this.data.projects.findIndex((p) => p.id === project.id);
-    project.updatedAt = new Date().toISOString();
+    const normalized = this.normalizeProject(project);
+    const idx = this.data.projects.findIndex((p) => p.id === normalized.id);
+    normalized.updatedAt = new Date().toISOString();
 
     if (idx >= 0) {
-      this.data.projects[idx] = project;
+      this.data.projects[idx] = normalized;
     } else {
-      this.data.projects.unshift(project);
+      this.data.projects.unshift(normalized);
     }
-    this.save();
-    return project;
+    this.save(true);
+    return normalized;
   }
 
   public deleteProject(id: string): boolean {
@@ -149,7 +191,7 @@ class Database {
     const initialLen = this.data.projects.length;
     this.data.projects = this.data.projects.filter((p) => p.id !== id);
     if (this.data.projects.length !== initialLen) {
-      this.save();
+      this.save(true);
       return true;
     }
     return false;
@@ -168,7 +210,7 @@ class Database {
       ...updates,
     };
     project.updatedAt = new Date().toISOString();
-    this.save();
+    this.save(true);
     return project.clips[clipIndex];
   }
 

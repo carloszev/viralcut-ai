@@ -3,20 +3,20 @@ node_modules/
 
 # Production build output
 dist/
+dist-server/
+release/
+scratch/
+*.iso
 
 # Local media uploads & exported video files
-uploads/*.mp4
-uploads/*.webm
-uploads/*.mkv
-uploads/*.part
-uploads/*.m4a
-uploads/*.ytdl
-uploads/*.temp*
-exports/*.mp4
-exports/*.temp*
+uploads/*
+!uploads/.gitkeep
+exports/*
+!exports/.gitkeep
 
 # Local database runtime data
-data/*.json
+data/*
+!data/.gitkeep
 
 # Environment variables
 .env

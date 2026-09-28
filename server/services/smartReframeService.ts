@@ -63,8 +63,18 @@ export class SmartReframeService {
 
     let dynamicPan = 0;
     if (config.mode === 'auto' && config.activeSpeakerTracking) {
-      // Subtle organic speaker tracking micro-motion
-      dynamicPan = Math.sin(timeOffset * 0.4) * 4.5;
+      if (config.faceTrackingData && config.faceTrackingData.length > 0) {
+        // Find nearest face tracking point for timeOffset
+        const nearest = config.faceTrackingData.reduce((prev, curr) =>
+          Math.abs(curr.time - timeOffset) < Math.abs(prev.time - timeOffset) ? curr : prev
+        );
+        // Desired crop window X centered around speaker's face
+        const desiredX = nearest.xPercent - cropWidthPercent / 2;
+        dynamicPan = desiredX - centerPoint;
+      } else {
+        // Subtle organic speaker tracking micro-motion fallback
+        dynamicPan = Math.sin(timeOffset * 0.4) * 4.5;
+      }
     }
 
     let finalX = centerPoint + config.horizontalOffsetPercent + dynamicPan;

@@ -5,6 +5,7 @@ import { Check, Circle, Loader2, Sparkles } from 'lucide-react';
 interface PipelineProgressProps {
   currentStage: PipelineStage;
   progressPercent: number;
+  stageDetail?: string;
   videoTitle?: string;
   thumbnailUrl?: string;
   errorMessage?: string;
@@ -20,6 +21,7 @@ interface StepItem {
 export const PipelineProgress: React.FC<PipelineProgressProps> = ({
   currentStage,
   progressPercent,
+  stageDetail,
   videoTitle,
   thumbnailUrl,
   errorMessage,
@@ -108,6 +110,11 @@ export const PipelineProgress: React.FC<PipelineProgressProps> = ({
               style={{ width: `${Math.max(5, progressPercent)}%` }}
             />
           </div>
+          {stageDetail && currentStage !== 'completed' && (
+            <p className="text-center text-xs text-cyber-cyan/90 font-mono mt-2.5 animate-pulse truncate px-2">
+              {stageDetail}
+            </p>
+          )}
         </div>
 
         {/* Real Step-by-Step Tracker */}

@@ -77,7 +77,7 @@ async function runComprehensiveAudit() {
   // TEST SECTION 3: Moment Detection & Potential Score (0-100)
   // -------------------------------------------------------------
   console.log('\n--- 3. Algoritmo de Detección de Momentos y Potential Score ---');
-  const candidates = retentionAnalyzer.analyzeTranscriptAndExtractSegments(subs, 348);
+  const candidates = await retentionAnalyzer.analyzeTranscriptAndExtractSegments(subs, 348);
   assert(candidates.length >= 3, 'Extrae múltiples momentos candidatos de alta retención', `${candidates.length} clips`);
 
   for (const c of candidates) {
